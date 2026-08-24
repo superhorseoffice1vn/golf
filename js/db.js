@@ -4,9 +4,9 @@
 const DB = (() => {
   const DEFAULT_SHEETS_URL = "https://script.google.com/macros/s/AKfycbzDu5QNAKlVtM8BGY6pw97XzBQ6sjwvZyB3o9MVY8N3sKtFD9koD-4eC3h3mCWLw3Em-A/exec";
   const DEFAULT_BAG = [
-    "Driver", "3 Wood", "5 Wood", "4 Hybrid",
+    "Driver", "3 Wood", "5 Wood", "7 Wood", "3 Hybrid",
     "4 Iron", "5 Iron", "6 Iron", "7 Iron", "8 Iron", "9 Iron",
-    "Pitching Wedge", "Gap Wedge", "Sand Wedge", "Lob Wedge", "Putter"
+    "Pitching Wedge", "53 Wedge", "56 Wedge", "60 Wedge", "Putter"
   ];
   const KEYS = {
     bag: "fl_bag",
@@ -44,6 +44,7 @@ const DB = (() => {
       return stored;
     },
     setBag(list) { write(KEYS.bag, list); },
+    getDefaultBag() { return DEFAULT_BAG.slice(); },
 
     // ---- Settings (Apps Script URL etc.) ----
     // First run: seed with the default deployment URL. Still editable/overridable in Settings.

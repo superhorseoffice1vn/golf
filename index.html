@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
-<title>Fairway Log</title>
+<title>App_GolfScore by Art</title>
 <meta name="theme-color" content="#0F1611" />
 <link rel="manifest" href="manifest.json" />
 <link rel="apple-touch-icon" href="icons/icon-192.png" />
@@ -13,8 +13,23 @@
 </head>
 <body>
 
+<!-- ============ LOGIN ============ -->
+<div class="login-wrap" id="loginScreen">
+  <div class="login-card">
+    <div class="login-badge">⛳</div>
+    <div class="login-title">App_GolfScore</div>
+    <div class="login-by">by Art</div>
+    <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password" />
+    <button class="btn primary block" id="btnLogin">Unlock</button>
+    <div class="login-error" id="loginError">Incorrect password</div>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="appRoot" style="display:none;">
+
 <div class="topbar">
-  <div class="brand">Fairway<span class="dot">•</span>Log</div>
+  <div class="brand">App_GolfScore <span class="dot">•</span> by Art</div>
   <div class="sync-pill dot" id="syncPill">—</div>
 </div>
 
@@ -80,11 +95,11 @@
   <button class="btn danger-ghost block" id="btnEndRound">End round</button>
 </section>
 
-<!-- ============ CLUB PICKER (overlay-ish, just a screen) ============ -->
+<!-- ============ CLUB PICKER ============ -->
 <section class="screen" id="screen-club">
   <div class="hero-title" style="margin-bottom:2px;">Which club?</div>
   <div class="hero-sub" id="clubPickerHint">GPS locked in — pick the club you just hit.</div>
-  <div class="club-grid" id="clubGrid"></div>
+  <div id="clubGroups"></div>
   <button class="btn ghost block" id="btnCancelClub">Cancel this shot</button>
 </section>
 
@@ -126,10 +141,14 @@
 
   <div class="section-title">Your bag</div>
   <div class="bag-list" id="bagList"></div>
-  <div class="row">
+  <div class="row" style="margin-bottom:10px;">
     <input type="text" id="newClubInput" placeholder="Add a club (e.g. 7 Iron)" autocomplete="off" />
     <button class="btn primary" id="btnAddClub" style="width:auto;">Add</button>
   </div>
+  <button class="btn ghost block" id="btnResetBag">Reset to standard bag</button>
+
+  <div class="section-title">Account</div>
+  <button class="btn danger-ghost block" id="btnLogout">Log out</button>
 </section>
 
 <div class="toast" id="toast"></div>
@@ -139,6 +158,8 @@
   <button data-screen="stats"><span class="ic">📊</span>Stats</button>
   <button data-screen="settings"><span class="ic">⚙️</span>Settings</button>
 </nav>
+
+</div><!-- #appRoot -->
 
 <script src="js/db.js"></script>
 <script src="js/stats.js"></script>

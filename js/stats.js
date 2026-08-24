@@ -31,6 +31,9 @@ const Stats = (() => {
           const cur = pts[i];
           const next = pts[i + 1];
           if (cur.type !== "Shot" || !cur.club) continue;
+          // Skip pairs where either endpoint had a poor fix — a bad reading
+          // at either end throws the calculated distance off badly.
+          if (cur.accuracy > 25 || next.accuracy > 25) continue;
           const d = haversine(cur, next);
           if (d < 2000) { // sanity cap ~2200yd, filters bad GPS fixes
             if (!byClub[cur.club]) byClub[cur.club] = [];

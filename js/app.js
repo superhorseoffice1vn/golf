@@ -32,21 +32,79 @@
   }
 
   // ---------------- Geolocation ----------------
-  function captureLocation({ onAcquiring } = {}) {
+  // A single getCurrentPosition() call often returns the FIRST fix the chip
+  // produces, which can be noisy (cold start, tree cover, cart canopy).
+  // Instead: watch for up to 8s, keep the best (lowest-error) sample seen,
+  // and resolve early the moment we get a genuinely tight fix.
+  const GOOD_ACCURACY_M = 6;
+  const MAX_WAIT_MS = 8000;
+  const WARN_ACCURACY_M = 20;
+
+  function captureLocation({ onAcquiring, onSample } = {}) {
     return new Promise((resolve, reject) => {
       if (!navigator.geolocation) { reject(new Error("No GPS on this device/browser")); return; }
       if (onAcquiring) onAcquiring();
-      navigator.geolocation.getCurrentPosition(
-        (pos) => resolve({
-          lat: pos.coords.latitude,
-          lon: pos.coords.longitude,
-          accuracy: Math.round(pos.coords.accuracy),
-          timestamp: Date.now()
-        }),
-        (err) => reject(err),
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+
+      let best = null;
+      let watchId = null;
+      let settled = false;
+      let timer = null;
+
+      const finish = (result, err) => {
+        if (settled) return;
+        settled = true;
+        if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+        clearTimeout(timer);
+        if (err) reject(err); else resolve(result);
+      };
+
+      watchId = navigator.geolocation.watchPosition(
+        (pos) => {
+          const sample = {
+            lat: pos.coords.latitude,
+            lon: pos.coords.longitude,
+            accuracy: Math.round(pos.coords.accuracy),
+            timestamp: Date.now()
+          };
+          if (!best || sample.accuracy < best.accuracy) best = sample;
+          if (onSample) onSample(sample, best);
+          if (best.accuracy <= GOOD_ACCURACY_M) finish(best);
+        },
+        (err) => { if (!best) finish(null, err); }, // keep waiting if we already have a fix and just get a hiccup
+        { enableHighAccuracy: true, maximumAge: 0, timeout: MAX_WAIT_MS }
       );
+
+      timer = setTimeout(() => {
+        if (best) finish(best);
+        else finish(null, new Error("No GPS fix — check location permission and try in open sky"));
+      }, MAX_WAIT_MS);
     });
+  }
+
+  function accuracyClass(m) {
+    if (m <= GOOD_ACCURACY_M) return "acc-good";
+    if (m <= WARN_ACCURACY_M) return "acc-ok";
+    return "acc-poor";
+  }
+
+  // ---------------- Club categorization ----------------
+  const CATEGORY_ORDER = ["wood", "iron", "wedge", "putter", "other"];
+  const CATEGORY_LABEL = {
+    wood: "Driver, Woods & Hybrids",
+    iron: "Irons",
+    wedge: "Wedges",
+    putter: "Putter",
+    other: "Other"
+  };
+  const CATEGORY_ICON = { wood: "◆", iron: "▮", wedge: "◐", putter: "●", other: "•" };
+
+  function clubCategory(name) {
+    const n = name.toLowerCase();
+    if (n.includes("putter")) return "putter";
+    if (n.includes("wedge")) return "wedge";
+    if (n.includes("iron")) return "iron";
+    if (n.includes("wood") || n.includes("driver") || n.includes("hybrid")) return "wood";
+    return "other";
   }
 
   // ---------------- Home ----------------
@@ -60,7 +118,7 @@
     } else {
       block.style.display = "none";
     }
-    $("#courseInput").value = "";
+    $("#courseInput").value = "Mukdahan Golf Club";
   }
 
   $("#btnContinueRound").addEventListener("click", () => showScreen("round"));
@@ -101,7 +159,7 @@
       const row = document.createElement("div");
       row.className = "shot-row" + (e.type === "Green" ? " green" : "");
       const time = new Date(e.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      row.innerHTML = `<span class="club-tag">${e.type === "Green" ? "📍 On green" : (i + 1) + ". " + e.club}</span><span class="meta">${time} · ±${e.accuracy}m</span>`;
+      row.innerHTML = `<span class="club-tag">${e.type === "Green" ? "📍 On green" : (i + 1) + ". " + e.club}</span><span class="meta">${time} · <span class="${accuracyClass(e.accuracy)}">±${e.accuracy}m</span></span>`;
       log.appendChild(row);
     });
 
@@ -139,9 +197,12 @@
     btn.classList.add("acquiring");
     $("#captureHint").textContent = "Locking GPS…";
     try {
-      const loc = await captureLocation();
+      const loc = await captureLocation({
+        onSample: (sample, best) => { $("#captureHint").textContent = "Locking GPS… ±" + best.accuracy + "m"; }
+      });
       pendingShot = loc;
       btn.classList.remove("acquiring");
+      if (loc.accuracy > WARN_ACCURACY_M) toast("Low GPS accuracy: ±" + loc.accuracy + "m — try open sky next time");
       openClubPicker();
     } catch (err) {
       btn.classList.remove("acquiring");
@@ -154,9 +215,10 @@
     const round = activeRound(); if (!round) return;
     const btn = $("#btnOnGreen");
     const original = btn.textContent;
-    btn.textContent = "Locking GPS…";
     try {
-      const loc = await captureLocation();
+      const loc = await captureLocation({
+        onSample: (sample, best) => { btn.textContent = "Locking GPS… ±" + best.accuracy + "m"; }
+      });
       const entry = {
         id: DB.uid(), roundId: round.id, hole: round.currentHole, seq: Date.now(),
         type: "Green", club: null, lat: loc.lat, lon: loc.lon, accuracy: loc.accuracy,
@@ -164,6 +226,7 @@
       };
       DB.addEntry(entry);
       Sync.attempt();
+      if (loc.accuracy > WARN_ACCURACY_M) toast("Low GPS accuracy: ±" + loc.accuracy + "m — try open sky next time");
       renderRound();
     } catch (err) {
       toast("GPS failed: " + (err.message || "check location permission"));
@@ -206,16 +269,42 @@
 
   // ---------------- Club picker ----------------
   function openClubPicker() {
-    const grid = $("#clubGrid");
-    grid.innerHTML = "";
-    DB.getBag().forEach(club => {
-      const b = document.createElement("button");
-      b.textContent = club;
-      b.addEventListener("click", () => chooseClub(club));
-      grid.appendChild(b);
+    const container = $("#clubGroups");
+    container.innerHTML = "";
+
+    const bag = DB.getBag();
+    const byCat = {};
+    bag.forEach(club => {
+      const cat = clubCategory(club);
+      if (!byCat[cat]) byCat[cat] = [];
+      byCat[cat].push(club);
     });
-    showScreen("club");
-    // showScreen doesn't know "club" for nav highlighting — fine, it's a sub-screen.
+
+    CATEGORY_ORDER.forEach(cat => {
+      const clubs = byCat[cat];
+      if (!clubs || clubs.length === 0) return;
+
+      const section = document.createElement("div");
+      section.className = "club-section";
+
+      const title = document.createElement("div");
+      title.className = "club-section-title";
+      title.innerHTML = `<span class="swatch" style="background:var(--cat-${cat})"></span>${CATEGORY_LABEL[cat]}`;
+      section.appendChild(title);
+
+      const grid = document.createElement("div");
+      grid.className = "club-grid";
+      clubs.forEach(club => {
+        const b = document.createElement("button");
+        b.className = "cat-" + cat;
+        b.innerHTML = `<span class="club-icon">${CATEGORY_ICON[cat]}</span><span>${club}</span>`;
+        b.addEventListener("click", () => chooseClub(club));
+        grid.appendChild(b);
+      });
+      section.appendChild(grid);
+      container.appendChild(section);
+    });
+
     $$(".screen").forEach(s => s.classList.remove("active"));
     $("#screen-club").classList.add("active");
   }
@@ -297,7 +386,8 @@
     bag.forEach((club, i) => {
       const row = document.createElement("div");
       row.className = "bag-item";
-      row.innerHTML = `<span>${club}</span>`;
+      const cat = clubCategory(club);
+      row.innerHTML = `<span><span class="club-icon" style="color:var(--cat-${cat}); margin-right:8px;">${CATEGORY_ICON[cat]}</span>${club}</span>`;
       const del = document.createElement("button");
       del.textContent = "✕";
       del.addEventListener("click", () => {
@@ -319,6 +409,13 @@
     renderBag();
   });
   $("#newClubInput").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#btnAddClub").click(); });
+
+  $("#btnResetBag").addEventListener("click", () => {
+    if (!confirm("Reset your bag to the standard club set? This removes any custom clubs you've added.")) return;
+    DB.setBag(DB.getDefaultBag());
+    renderBag();
+    toast("Bag reset to standard set");
+  });
 
   $("#btnSaveUrl").addEventListener("click", () => {
     const url = $("#sheetsUrlInput").value.trim();
@@ -357,6 +454,39 @@
   }
   Sync.onStatusChange(updatePill);
 
+  // ---------------- Login ----------------
+  const AUTH_KEY = "fl_authed";
+  const APP_PASSWORD = "shsh";
+
+  function attemptLogin() {
+    const input = $("#loginPassword");
+    if (input.value === APP_PASSWORD) {
+      localStorage.setItem(AUTH_KEY, "true");
+      $("#loginError").classList.remove("show");
+      enterApp();
+    } else {
+      $("#loginError").classList.add("show");
+      input.classList.add("shake");
+      setTimeout(() => input.classList.remove("shake"), 350);
+      input.value = "";
+      input.focus();
+    }
+  }
+  $("#btnLogin").addEventListener("click", attemptLogin);
+  $("#loginPassword").addEventListener("keydown", (e) => { if (e.key === "Enter") attemptLogin(); });
+
+  $("#btnLogout").addEventListener("click", () => {
+    if (!confirm("Log out? You'll need the password to get back in.")) return;
+    localStorage.removeItem(AUTH_KEY);
+    location.reload();
+  });
+
+  function enterApp() {
+    $("#loginScreen").style.display = "none";
+    $("#appRoot").style.display = "";
+    boot();
+  }
+
   // ---------------- Boot ----------------
   function boot() {
     if ("serviceWorker" in navigator) {
@@ -367,5 +497,10 @@
     const round = activeId ? DB.getRound(activeId) : null;
     showScreen(round && !round.ended ? "round" : "home");
   }
-  boot();
+
+  if (localStorage.getItem(AUTH_KEY) === "true") {
+    enterApp();
+  } else {
+    $("#loginPassword").focus();
+  }
 })();

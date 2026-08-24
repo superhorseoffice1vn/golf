@@ -9,6 +9,11 @@
   --accent-ink: #1A1400;
   --fairway: #4C8B52;     /* secondary / confirm */
   --danger: #D9694F;
+  --cat-wood: #F2A93C;    /* driver/woods/hybrids — amber, power */
+  --cat-iron: #6E9BC7;    /* irons — steel blue, precision */
+  --cat-wedge: #D9784F;   /* wedges — terracotta, spin/short game */
+  --cat-putter: #4C8B52;  /* putter — fairway green, on the green */
+  --cat-other: #9CAB9F;   /* custom/uncategorized clubs */
   --mono: "SF Mono", "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
   --sans: -apple-system, "Inter", "Segoe UI", Roboto, sans-serif;
   --radius: 16px;
@@ -154,6 +159,9 @@ input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 }
 .shot-row .club-tag { font-weight: 700; }
 .shot-row .meta { color: var(--ink-dim); font-family: var(--mono); font-size: 12px; }
+.acc-good { color: var(--fairway); }
+.acc-ok { color: var(--accent); }
+.acc-poor { color: var(--danger); font-weight: 700; }
 .shot-row.green .club-tag { color: var(--fairway); }
 
 /* Signature capture button: golf ball + acquiring-GPS ripple */
@@ -182,10 +190,34 @@ input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 
 .club-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 18px; }
 .club-grid button {
-  padding: 16px 8px; border-radius: 12px; border: 1px solid var(--line);
-  background: var(--panel); color: var(--ink); font-weight: 700; font-size: 15px;
+  padding: 16px 8px 14px; border-radius: 12px; border: 1px solid var(--line); border-left: 4px solid transparent;
+  background: var(--panel); color: var(--ink); font-weight: 700; font-size: 14px;
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
 }
-.club-grid button:active, .club-grid button.selected { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.club-grid button .club-icon { font-size: 17px; line-height: 1; }
+.club-grid button:active { transform: scale(0.97); }
+
+/* Category colors: woods/driver/hybrid = amber (power), irons = steel (precision),
+   wedges = terracotta (spin/short game), putter = fairway green (on the green). */
+.club-grid button.cat-wood   { border-left-color: var(--cat-wood); }
+.club-grid button.cat-iron   { border-left-color: var(--cat-iron); }
+.club-grid button.cat-wedge  { border-left-color: var(--cat-wedge); }
+.club-grid button.cat-putter { border-left-color: var(--cat-putter); }
+.club-grid button.cat-other  { border-left-color: var(--cat-other); }
+
+.club-grid button.cat-wood:active   { background: var(--cat-wood);   color: #1A1400; }
+.club-grid button.cat-iron:active   { background: var(--cat-iron);   color: #06131C; }
+.club-grid button.cat-wedge:active  { background: var(--cat-wedge);  color: #200D02; }
+.club-grid button.cat-putter:active { background: var(--cat-putter); color: #06170A; }
+.club-grid button.cat-other:active  { background: var(--cat-other);  color: #0B120C; }
+
+.club-section { margin-bottom: 22px; }
+.club-section-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-dim);
+  margin-bottom: 10px;
+}
+.club-section-title .swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
 
 .putts-block { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; margin-bottom: 18px; }
 .putts-control { display: flex; align-items: center; justify-content: center; gap: 24px; margin: 10px 0; }
@@ -230,6 +262,48 @@ input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .kpi .lbl { font-size: 11px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.05em; margin-top: 2px; }
 
 .empty { color: var(--ink-dim); font-size: 14px; text-align: center; padding: 40px 20px; }
+
+/* ---------- Login ---------- */
+.login-wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background:
+    radial-gradient(circle at 50% 0%, rgba(76,139,82,0.12), transparent 60%),
+    var(--bg);
+}
+.login-card {
+  width: 100%;
+  max-width: 340px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  padding: 36px 28px 28px;
+  text-align: center;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.35);
+}
+.login-badge {
+  width: 64px; height: 64px; border-radius: 50%;
+  background: var(--panel-raised); border: 2px solid var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; margin: 0 auto 18px;
+}
+.login-title { font-size: 22px; font-weight: 800; letter-spacing: 0.01em; }
+.login-by { font-family: var(--mono); font-size: 12px; color: var(--ink-dim); text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 26px; }
+.login-card input[type="password"] { text-align: center; letter-spacing: 0.2em; margin-bottom: 14px; }
+.login-error {
+  display: none;
+  color: var(--danger); font-size: 13px; margin-top: 12px;
+}
+.login-error.show { display: block; }
+.login-card input.shake { animation: shake 0.35s; border-color: var(--danger); }
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
 
 /* ---------- Settings / bag editor ---------- */
 .bag-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }

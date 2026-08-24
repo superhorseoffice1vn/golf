@@ -1,6 +1,6 @@
 {
-  "name": "Fairway Log",
-  "short_name": "Fairway Log",
+  "name": "App_GolfScore by Art",
+  "short_name": "GolfScore",
   "description": "Golf shot, club, and putt tracker with GPS distance stats, synced to Google Sheets",
   "start_url": "./index.html",
   "scope": "./",
