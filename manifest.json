@@ -1,0 +1,15 @@
+{
+  "name": "Fairway Log",
+  "short_name": "Fairway Log",
+  "description": "Golf shot, club, and putt tracker with GPS distance stats, synced to Google Sheets",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0F1611",
+  "theme_color": "#0F1611",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

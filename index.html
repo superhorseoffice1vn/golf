@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<title>Fairway Log</title>
+<meta name="theme-color" content="#0F1611" />
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+<div class="topbar">
+  <div class="brand">Fairway<span class="dot">•</span>Log</div>
+  <div class="sync-pill dot" id="syncPill">—</div>
+</div>
+
+<!-- ============ HOME ============ -->
+<section class="screen" id="screen-home">
+  <div class="hero-title">Round setup</div>
+  <div class="hero-sub">Log the course, start playing.</div>
+
+  <div id="continueBlock" class="stack" style="display:none; margin-bottom:22px;">
+    <div class="field-label">Round in progress</div>
+    <div class="stat-card" style="margin-bottom:0;">
+      <div class="title" id="continueCourse">—</div>
+      <button class="btn primary block" id="btnContinueRound">Continue round →</button>
+    </div>
+  </div>
+
+  <div class="stack">
+    <div class="field-label">Course name</div>
+    <input type="text" id="courseInput" placeholder="e.g. Riverdale Golf Club" autocomplete="off" />
+    <button class="btn confirm block" id="btnStartRound">Start round</button>
+  </div>
+</section>
+
+<!-- ============ ROUND ============ -->
+<section class="screen" id="screen-round">
+  <div class="course-chip" id="roundCourseChip">—</div>
+
+  <div class="hole-readout">
+    <div>
+      <div class="label">Hole</div>
+      <div class="num" id="holeNum">1</div>
+    </div>
+    <div class="stepper">
+      <button id="holeMinus">−</button>
+      <button id="holePlus">+</button>
+    </div>
+  </div>
+
+  <div class="shot-log" id="shotLog"></div>
+
+  <div class="capture-wrap">
+    <button class="capture-btn" id="btnLogShot">
+      <div class="dimple" style="top:30%; left:38%;"></div>
+      <div class="dimple" style="top:55%; left:60%;"></div>
+      <div class="dimple" style="top:65%; left:35%;"></div>
+      <span class="cta">Log shot</span>
+    </button>
+    <div class="capture-hint" id="captureHint">Tap for GPS + club</div>
+  </div>
+
+  <button class="btn block" id="btnOnGreen" style="margin-bottom:18px;">On green — mark spot</button>
+
+  <div class="putts-block" id="puttsBlock" style="display:none;">
+    <div class="field-label" style="text-align:center;">Putts this hole</div>
+    <div class="putts-control">
+      <button id="puttsMinus">−</button>
+      <div class="count" id="puttsCount">0</div>
+      <button id="puttsPlus">+</button>
+    </div>
+    <button class="btn confirm block" id="btnFinishHole">Finish hole → next</button>
+  </div>
+
+  <button class="btn danger-ghost block" id="btnEndRound">End round</button>
+</section>
+
+<!-- ============ CLUB PICKER (overlay-ish, just a screen) ============ -->
+<section class="screen" id="screen-club">
+  <div class="hero-title" style="margin-bottom:2px;">Which club?</div>
+  <div class="hero-sub" id="clubPickerHint">GPS locked in — pick the club you just hit.</div>
+  <div class="club-grid" id="clubGrid"></div>
+  <button class="btn ghost block" id="btnCancelClub">Cancel this shot</button>
+</section>
+
+<!-- ============ STATS ============ -->
+<section class="screen" id="screen-stats">
+  <div class="hero-title">Stats</div>
+  <div class="hero-sub">Across all logged rounds.</div>
+
+  <div class="kpi-grid" style="margin-bottom:18px;">
+    <div class="kpi"><div class="num" id="kpiRounds">0</div><div class="lbl">Rounds</div></div>
+    <div class="kpi"><div class="num" id="kpiStrokes">0</div><div class="lbl">Total strokes</div></div>
+    <div class="kpi"><div class="num" id="kpiPutts">0</div><div class="lbl">Total putts</div></div>
+    <div class="kpi"><div class="num" id="kpiPuttsHole">0.0</div><div class="lbl">Putts / hole</div></div>
+  </div>
+
+  <div class="stat-card">
+    <div class="title">Distance per club (yards)</div>
+    <div id="clubStatsList"><div class="empty">Log a few shots to see distances here.</div></div>
+  </div>
+
+  <div class="stat-card">
+    <div class="title">Rounds</div>
+    <div id="roundsList"><div class="empty">No rounds yet.</div></div>
+  </div>
+</section>
+
+<!-- ============ SETTINGS ============ -->
+<section class="screen" id="screen-settings">
+  <div class="hero-title">Settings</div>
+
+  <div class="section-title">Google Sheets sync</div>
+  <div class="stack" style="margin-bottom:8px;">
+    <div class="field-label">Apps Script Web App URL</div>
+    <input type="text" id="sheetsUrlInput" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off" />
+    <button class="btn block" id="btnSaveUrl">Save</button>
+    <button class="btn ghost block" id="btnSyncNow">Sync now (<span id="unsyncedCount">0</span> pending)</button>
+  </div>
+
+  <div class="section-title">Your bag</div>
+  <div class="bag-list" id="bagList"></div>
+  <div class="row">
+    <input type="text" id="newClubInput" placeholder="Add a club (e.g. 7 Iron)" autocomplete="off" />
+    <button class="btn primary" id="btnAddClub" style="width:auto;">Add</button>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
+
+<nav class="bottom-nav">
+  <button data-screen="home" class="active"><span class="ic">⛳</span>Round</button>
+  <button data-screen="stats"><span class="ic">📊</span>Stats</button>
+  <button data-screen="settings"><span class="ic">⚙️</span>Settings</button>
+</nav>
+
+<script src="js/db.js"></script>
+<script src="js/stats.js"></script>
+<script src="js/sync.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
