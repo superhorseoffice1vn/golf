@@ -6,10 +6,11 @@
 const Sync = (() => {
   let inFlight = false;
   let timer = null;
+  let lastError = null;
   const listeners = [];
 
   function onStatusChange(fn) { listeners.push(fn); }
-  function emit(status) { listeners.forEach(fn => fn(status)); }
+  function emit(status) { listeners.forEach(fn => fn(status, lastError)); }
 
   function currentStatus() {
     if (!navigator.onLine) return "offline";
@@ -69,14 +70,19 @@ const Sync = (() => {
         body: JSON.stringify({ rows })
       });
       if (!res.ok) throw new Error("HTTP " + res.status);
-      const data = await res.json();
-      if (data.status !== "ok") throw new Error(data.message || "sync rejected");
+      const raw = await res.text();
+      let data;
+      try { data = JSON.parse(raw); }
+      catch (e) { throw new Error("Server didn't return JSON — check the Apps Script deployment access is 'Anyone'."); }
+      if (data.status !== "ok") throw new Error(data.message || "Apps Script rejected the write");
 
+      lastError = null;
       DB.markEntriesSynced(entries.map(e => e.id));
       DB.markHolesSynced(holes.map(h => h.id));
       emit(currentStatus());
     } catch (err) {
-      console.warn("Sync failed, will retry:", err.message);
+      lastError = err.message || String(err);
+      console.warn("Sync failed, will retry:", lastError);
       emit(navigator.onLine ? "pending" : "offline");
     } finally {
       inFlight = false;
@@ -91,5 +97,5 @@ const Sync = (() => {
     attempt();
   }
 
-  return { start, attempt, onStatusChange, currentStatus };
+  return { start, attempt, onStatusChange, currentStatus, lastError: () => lastError };
 })();

@@ -36,8 +36,13 @@ function doPost(e) {
     const sheet = getSheet_();
 
     // Skip any Entry ID already present, so a retried sync never double-writes.
+    // (Guard the 0-row case — a brand-new sheet with only the header row would
+    // otherwise throw, since Apps Script requires numRows >= 1 on getRange.)
+    const lastRow = sheet.getLastRow();
     const existingIds = new Set(
-      sheet.getRange(2, 10, Math.max(sheet.getLastRow() - 1, 0), 1).getValues().flat().filter(String)
+      lastRow > 1
+        ? sheet.getRange(2, 10, lastRow - 1, 1).getValues().flat().filter(String)
+        : []
     );
 
     const toWrite = [];

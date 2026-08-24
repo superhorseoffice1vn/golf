@@ -282,6 +282,7 @@
     const settings = DB.getSettings();
     $("#sheetsUrlInput").value = settings.sheetsUrl || "";
     $("#unsyncedCount").textContent = DB.unsyncedCount();
+    renderSyncError(Sync.lastError());
     renderBag();
   }
 
@@ -332,13 +333,27 @@
   });
 
   // ---------------- Sync status pill ----------------
-  function updatePill(status) {
+  function updatePill(status, errMsg) {
     const pill = $("#syncPill");
     pill.className = "sync-pill dot " + status;
     if (status === "synced") pill.textContent = "Synced";
     else if (status === "pending") pill.textContent = DB.unsyncedCount() + " pending";
     else pill.textContent = "Offline";
-    if ($("#screen-settings").classList.contains("active")) $("#unsyncedCount").textContent = DB.unsyncedCount();
+    pill.title = errMsg || "";
+    if ($("#screen-settings").classList.contains("active")) {
+      $("#unsyncedCount").textContent = DB.unsyncedCount();
+      renderSyncError(errMsg);
+    }
+  }
+  function renderSyncError(errMsg) {
+    const el = $("#syncError");
+    if (!el) return;
+    if (errMsg && navigator.onLine) {
+      el.style.display = "";
+      el.textContent = "Last sync error: " + errMsg;
+    } else {
+      el.style.display = "none";
+    }
   }
   Sync.onStatusChange(updatePill);
 

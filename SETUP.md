@@ -48,6 +48,19 @@ You're set. Start a round from the **Round** tab.
 - You can also force a push from Settings > **Sync now**.
 - Nothing is ever deleted locally after syncing — your phone keeps the full history too.
 
+## Updating an existing deployment
+
+If you already deployed the Apps Script and are updating the code (e.g. a bug fix), pasting new
+code into the editor and saving is **not enough** — the live URL keeps serving the old version
+until you publish a new one:
+
+1. In the Apps Script editor: **Deploy > Manage deployments**.
+2. Click the pencil (edit) icon on your existing deployment.
+3. Under "Version", choose **New version**.
+4. Click **Deploy**.
+
+The Web app URL stays the same — you don't need to update it in the app.
+
 ## Notes / limitations
 
 - Distance-per-club is calculated as the GPS distance from where you hit a shot to where you hit (or marked) the next one — so tag **On green** when your approach lands, or the last full-swing shot into each green won't get a distance.

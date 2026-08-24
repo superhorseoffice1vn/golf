@@ -2,6 +2,12 @@
 // source of truth; Google Sheets is just a mirror we push to when online.
 
 const DB = (() => {
+  const DEFAULT_SHEETS_URL = "https://script.google.com/macros/s/AKfycbzDu5QNAKlVtM8BGY6pw97XzBQ6sjwvZyB3o9MVY8N3sKtFD9koD-4eC3h3mCWLw3Em-A/exec";
+  const DEFAULT_BAG = [
+    "Driver", "3 Wood", "5 Wood", "4 Hybrid",
+    "4 Iron", "5 Iron", "6 Iron", "7 Iron", "8 Iron", "9 Iron",
+    "Pitching Wedge", "Gap Wedge", "Sand Wedge", "Lob Wedge", "Putter"
+  ];
   const KEYS = {
     bag: "fl_bag",
     rounds: "fl_rounds",
@@ -31,11 +37,21 @@ const DB = (() => {
     uid,
 
     // ---- Bag (custom club list) ----
-    getBag() { return read(KEYS.bag, []); },
+    // First run: seed with a standard set. After that, whatever the user has edited it to.
+    getBag() {
+      const stored = read(KEYS.bag, null);
+      if (stored === null) { write(KEYS.bag, DEFAULT_BAG); return DEFAULT_BAG.slice(); }
+      return stored;
+    },
     setBag(list) { write(KEYS.bag, list); },
 
     // ---- Settings (Apps Script URL etc.) ----
-    getSettings() { return read(KEYS.settings, { sheetsUrl: "" }); },
+    // First run: seed with the default deployment URL. Still editable/overridable in Settings.
+    getSettings() {
+      const stored = read(KEYS.settings, null);
+      if (stored === null) { const s = { sheetsUrl: DEFAULT_SHEETS_URL }; write(KEYS.settings, s); return s; }
+      return stored;
+    },
     setSettings(s) { write(KEYS.settings, s); },
 
     // ---- Rounds ----
