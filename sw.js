@@ -2,11 +2,13 @@ const CACHE = "fairway-log-v1";
 const SHELL = [
   "./",
   "./index.html",
+  "./dashboard.html",
   "./css/styles.css",
   "./js/db.js",
   "./js/stats.js",
   "./js/sync.js",
   "./js/app.js",
+  "./js/dashboard.js",
   "./manifest.json",
   "./icons/icon-192.png",
   "./icons/icon-512.png"

@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<title>Dashboard — App_GolfScore by Art</title>
+<meta name="theme-color" content="#0F1611" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+<!-- ============ LOGIN (shared with main app — same origin, same localStorage) ============ -->
+<div class="login-wrap" id="loginScreen">
+  <div class="login-card">
+    <div class="login-badge">⛳</div>
+    <div class="login-title">App_GolfScore</div>
+    <div class="login-by">Dashboard</div>
+    <input type="password" id="loginPassword" placeholder="Password" autocomplete="current-password" />
+    <button class="btn primary block" id="btnLogin">Unlock</button>
+    <div class="login-error" id="loginError">Incorrect password</div>
+  </div>
+</div>
+
+<!-- ============ DASHBOARD ============ -->
+<div id="appRoot" style="display:none;">
+
+<div class="topbar">
+  <div class="brand">App_GolfScore <span class="dot">•</span> Dashboard</div>
+  <div class="sync-pill dot" id="syncPill">—</div>
+</div>
+
+<div class="screen active" id="screen-dash" style="padding-bottom: 40px;">
+  <div class="dash-wrap">
+
+    <div id="urlSetup" style="display:none;" class="stack">
+      <div class="field-label">Apps Script Web App URL</div>
+      <input type="text" id="sheetsUrlInput" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off" />
+      <button class="btn confirm block" id="btnSaveUrl">Load dashboard</button>
+    </div>
+
+    <div id="dashContent" style="display:none;">
+      <div class="refresh-row">
+        <span class="stamp" id="lastUpdated">—</span>
+        <button class="refresh-btn" id="btnRefresh">↻ Refresh</button>
+      </div>
+
+      <div class="dash-tabs">
+        <button data-tab="round" class="active">This Round</button>
+        <button data-tab="alltime">All-Time</button>
+      </div>
+
+      <!-- THIS ROUND -->
+      <div id="tab-round">
+        <div class="round-chip-row" id="roundChipRow"></div>
+        <div class="round-header">
+          <div class="course" id="rdCourse">—</div>
+          <div class="date" id="rdDate">—</div>
+        </div>
+        <div class="kpi-grid" style="margin-bottom:18px;">
+          <div class="kpi"><div class="num" id="rdStrokes">0</div><div class="lbl">Total strokes</div></div>
+          <div class="kpi"><div class="num" id="rdPutts">0</div><div class="lbl">Total putts</div></div>
+          <div class="kpi"><div class="num" id="rdHoles">0</div><div class="lbl">Holes played</div></div>
+          <div class="kpi"><div class="num" id="rdPuttsHole">0.0</div><div class="lbl">Putts / hole</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="title">Hole-by-hole</div>
+          <table class="hole-table" id="rdHoleTable"></table>
+        </div>
+        <div class="stat-card">
+          <div class="title">Distance per club (yards) — this round</div>
+          <div id="rdClubDist"><div class="empty">No shots logged with GPS this round.</div></div>
+        </div>
+      </div>
+
+      <!-- ALL-TIME -->
+      <div id="tab-alltime" style="display:none;">
+        <div class="kpi-grid" style="margin-bottom:18px;">
+          <div class="kpi"><div class="num" id="atRounds">0</div><div class="lbl">Rounds</div></div>
+          <div class="kpi"><div class="num" id="atStrokes">0</div><div class="lbl">Total strokes</div></div>
+          <div class="kpi"><div class="num" id="atPutts">0</div><div class="lbl">Total putts</div></div>
+          <div class="kpi"><div class="num" id="atPuttsHole">0.0</div><div class="lbl">Putts / hole</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="title">Strokes per round (last 10)</div>
+          <div class="trend-chart" id="trendChart"></div>
+          <div class="trend-labels" id="trendLabels"></div>
+        </div>
+        <div class="stat-card">
+          <div class="title">Distance per club (yards) — all rounds</div>
+          <div id="atClubDist"><div class="empty">No shots logged with GPS yet.</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="title">All rounds</div>
+          <div id="atRoundsList"><div class="empty">No rounds yet.</div></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="dashLoading" class="dash-loading" style="display:none;">Loading round data…</div>
+    <div id="dashError" class="dash-error" style="display:none;">
+      <div id="dashErrorMsg">Couldn't load data.</div>
+      <button class="btn" id="btnRetry">Try again</button>
+    </div>
+
+  </div>
+</div>
+
+</div><!-- #appRoot -->
+
+<div class="toast" id="toast"></div>
+
+<script src="js/dashboard.js"></script>
+</body>
+</html>

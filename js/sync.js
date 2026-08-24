@@ -40,6 +40,7 @@ const Sync = (() => {
       rows.push({
         kind: "entry",
         id: e.id,
+        roundId: e.roundId,
         timestamp: e.timestamp,
         course: courseFor(e.roundId),
         hole: e.hole,
@@ -54,6 +55,7 @@ const Sync = (() => {
       rows.push({
         kind: "hole",
         id: h.id,
+        roundId: h.roundId,
         timestamp: h.timestamp,
         course: courseFor(h.roundId),
         hole: h.hole,

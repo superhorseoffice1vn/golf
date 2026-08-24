@@ -50,7 +50,8 @@ You're set. Start a round from the **Round** tab.
 
 ## Updating an existing deployment
 
-If you already deployed the Apps Script and are updating the code (e.g. a bug fix), pasting new
+If you already deployed the Apps Script and are updating the code (e.g. a bug fix, or this
+update which adds a "Round ID" column and a read endpoint for the dashboard), pasting new
 code into the editor and saving is **not enough** — the live URL keeps serving the old version
 until you publish a new one:
 
@@ -60,6 +61,15 @@ until you publish a new one:
 4. Click **Deploy**.
 
 The Web app URL stays the same — you don't need to update it in the app.
+
+## Part 4 — The Dashboard
+
+`dashboard.html` is a separate page in the same app — open it from Settings > **Open Round Dashboard**, or go directly to your GitHub Pages URL + `dashboard.html`. It reads live from your Google Sheet (not from the phone), so it works on any device — check it right after a round on your phone, or pull it up later on a computer.
+
+- **This Round tab**: your most recent round by default — total strokes, putts, a hole-by-hole table, and distance-per-club for that round. Tap any chip at the top to switch to a different past round.
+- **All-Time tab**: totals across every round, a strokes-per-round trend chart (last 10 rounds), aggregate distance-per-club, and a tappable list of every round.
+- Since it shares the same browser storage as the main app, if you're already logged in there, the dashboard unlocks automatically — no separate password entry needed on the same device/browser.
+- **Refresh** button re-fetches from the Sheet — useful right after finishing a round to pull in the latest sync.
 
 ## Notes / limitations
 

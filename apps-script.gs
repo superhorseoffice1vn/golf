@@ -1,5 +1,5 @@
 /**
- * Fairway Log — Google Sheets receiver.
+ * Fairway Log / App_GolfScore — Google Sheets receiver + reader.
  *
  * SETUP:
  * 1. Open (or create) the Google Sheet you want shots logged to.
@@ -11,12 +11,21 @@
  * 5. Click Deploy, authorize when prompted, then copy the "Web app URL".
  * 6. Paste that URL into the app's Settings screen ("Apps Script Web App URL").
  *
+ * If you're UPDATING an existing deployment, editing this code isn't enough —
+ * go to Deploy > Manage deployments > pencil icon > New version > Deploy.
+ * The URL stays the same.
+ *
  * This creates a sheet tab called "GolfLog" automatically if it doesn't exist,
- * with one row per shot / green marker / putts entry.
+ * with one row per shot / green marker / putts entry. doPost() writes new rows;
+ * doGet() returns all rows as JSON for the dashboard to read.
  */
 
 const SHEET_NAME = "GolfLog";
-const HEADERS = ["Timestamp", "Course", "Hole", "Type", "Club", "Lat", "Lon", "Accuracy (m)", "Putts", "Entry ID"];
+// "Round ID" is appended at the END on purpose — if you already had data logged
+// under an older version of this script (10 columns, no Round ID), appending a
+// new column at the end keeps every existing column position unchanged.
+const HEADERS = ["Timestamp", "Course", "Hole", "Type", "Club", "Lat", "Lon", "Accuracy (m)", "Putts", "Entry ID", "Round ID"];
+const ENTRY_ID_COL = HEADERS.indexOf("Entry ID") + 1; // 1-based
 
 function getSheet_() {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -25,8 +34,20 @@ function getSheet_() {
     sheet = ss.insertSheet(SHEET_NAME);
     sheet.appendRow(HEADERS);
     sheet.setFrozenRows(1);
+    return sheet;
+  }
+  // Self-heal: an older deployment may have created fewer columns. Extend the
+  // header row so new columns (like Round ID) line up correctly; this never
+  // touches existing data rows or column order.
+  if (sheet.getLastColumn() < HEADERS.length) {
+    sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+    sheet.setFrozenRows(1);
   }
   return sheet;
+}
+
+function jsonOut_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
 
 function doPost(e) {
@@ -41,7 +62,7 @@ function doPost(e) {
     const lastRow = sheet.getLastRow();
     const existingIds = new Set(
       lastRow > 1
-        ? sheet.getRange(2, 10, lastRow - 1, 1).getValues().flat().filter(String)
+        ? sheet.getRange(2, ENTRY_ID_COL, lastRow - 1, 1).getValues().flat().filter(String)
         : []
     );
 
@@ -58,7 +79,8 @@ function doPost(e) {
         r.lon != null ? r.lon : "",
         r.accuracy_m != null ? r.accuracy_m : "",
         r.putts != null ? r.putts : "",
-        r.id || ""
+        r.id || "",
+        r.roundId || ""
       ]);
     });
 
@@ -66,15 +88,32 @@ function doPost(e) {
       sheet.getRange(sheet.getLastRow() + 1, 1, toWrite.length, HEADERS.length).setValues(toWrite);
     }
 
-    return ContentService.createTextOutput(JSON.stringify({ status: "ok", written: toWrite.length }))
-      .setMimeType(ContentService.MimeType.JSON);
+    return jsonOut_({ status: "ok", written: toWrite.length });
   } catch (err) {
-    return ContentService.createTextOutput(JSON.stringify({ status: "error", message: err.message }))
-      .setMimeType(ContentService.MimeType.JSON);
+    return jsonOut_({ status: "error", message: err.message });
   }
 }
 
+/**
+ * Returns every logged row as JSON, keyed by header name — this is what the
+ * dashboard fetches. GET https://.../exec (no params needed).
+ */
 function doGet(e) {
-  return ContentService.createTextOutput(JSON.stringify({ status: "ok", message: "Fairway Log receiver is live." }))
-    .setMimeType(ContentService.MimeType.JSON);
+  try {
+    const sheet = getSheet_();
+    const lastRow = sheet.getLastRow();
+    if (lastRow < 2) return jsonOut_({ status: "ok", rows: [] });
+
+    const values = sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues();
+    const rows = values.map(r => {
+      const obj = {};
+      HEADERS.forEach((h, i) => {
+        obj[h] = r[i] instanceof Date ? r[i].toISOString() : r[i];
+      });
+      return obj;
+    });
+    return jsonOut_({ status: "ok", rows: rows });
+  } catch (err) {
+    return jsonOut_({ status: "error", message: err.message });
+  }
 }
