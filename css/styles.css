@@ -375,3 +375,18 @@ input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 @media (min-width: 560px) {
   .screen, .dash-wrap { padding-left: 24px; padding-right: 24px; }
 }
+
+/* ---------- Shot map ---------- */
+.map-caption { font-size: 11px; color: var(--ink-dim); margin-bottom: 10px; }
+.map-box {
+  height: 340px; border-radius: 12px; overflow: hidden;
+  border: 1px solid var(--line); background: var(--panel);
+}
+.leaflet-container { background: var(--bg); font-family: var(--sans); }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--panel-raised); color: var(--ink); }
+.leaflet-popup-content { font-size: 13px; margin: 10px 12px; }
+.leaflet-popup-content b { color: var(--accent); }
+.leaflet-control-zoom a { background: var(--panel) !important; color: var(--ink) !important; border-color: var(--line) !important; }
+.leaflet-control-zoom a:hover { background: var(--panel-raised) !important; }
+.leaflet-control-attribution { background: rgba(15,22,17,0.75) !important; color: var(--ink-dim) !important; font-size: 10px !important; }
+.leaflet-control-attribution a { color: var(--ink-dim) !important; }

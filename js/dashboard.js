@@ -12,6 +12,9 @@
 
   let rounds = [];          // grouped rounds, most recent first
   let selectedRoundKey = null;
+  let selectedMapHole = "all";
+  let shotMapInstance = null;
+  let shotMapLayer = null;
 
   function toast(msg) {
     const t = $("#toast");
@@ -150,6 +153,105 @@
     return { holesSet, perHole, totalStrokes, totalPutts, holesPlayed: holesSet.length, clubDistances };
   }
 
+  // ---------------- Shot map ----------------
+  const HOLE_COLORS = ["#F2A93C", "#6E9BC7", "#D9784F", "#4C8B52", "#C77DFF", "#5FD4C7", "#E85D75", "#8FBF5A"];
+
+  function ensureMap() {
+    if (shotMapInstance) return shotMapInstance;
+    shotMapInstance = L.map("shotMap", { zoomControl: true, attributionControl: true });
+    L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", {
+      attribution: "Imagery &copy; Esri",
+      maxZoom: 20
+    }).addTo(shotMapInstance);
+    shotMapLayer = L.layerGroup().addTo(shotMapInstance);
+    return shotMapInstance;
+  }
+
+  function renderMapHoleChips(rd) {
+    const chipRow = $("#mapHoleChips");
+    chipRow.innerHTML = "";
+    const holes = [...new Set(rd.rows.map(r => r.hole).filter(h => h != null))].sort((a, b) => a - b);
+
+    const allChip = document.createElement("button");
+    allChip.className = "round-chip" + (selectedMapHole === "all" ? " active" : "");
+    allChip.textContent = "All holes";
+    allChip.addEventListener("click", () => { selectedMapHole = "all"; renderMapHoleChips(rd); updateShotMap(rd); });
+    chipRow.appendChild(allChip);
+
+    holes.forEach(h => {
+      const chip = document.createElement("button");
+      chip.className = "round-chip" + (selectedMapHole === h ? " active" : "");
+      chip.textContent = "Hole " + h;
+      chip.addEventListener("click", () => { selectedMapHole = h; renderMapHoleChips(rd); updateShotMap(rd); });
+      chipRow.appendChild(chip);
+    });
+  }
+
+  function updateShotMap(rd) {
+    const points = rd.rows.filter(r =>
+      r.lat != null && r.lon != null && (r.type === "Shot" || r.type === "Green") &&
+      (selectedMapHole === "all" ? true : r.hole === selectedMapHole)
+    );
+    renderShotMap(points, selectedMapHole === "all");
+  }
+
+  function renderShotMap(points, colorByHole) {
+    const box = $("#shotMap");
+    const empty = $("#shotMapEmpty");
+    if (!points.length) {
+      box.style.display = "none";
+      empty.style.display = "";
+      return;
+    }
+    box.style.display = "";
+    empty.style.display = "none";
+
+    const map = ensureMap();
+    setTimeout(() => map.invalidateSize(), 50); // in case the container was hidden when the map was created
+    shotMapLayer.clearLayers();
+
+    const byHole = {};
+    points.forEach(p => { (byHole[p.hole] = byHole[p.hole] || []).push(p); });
+
+    let holeIdx = 0;
+    const allLatLngs = [];
+
+    Object.keys(byHole).sort((a, b) => a - b).forEach(holeNum => {
+      const holePts = byHole[holeNum];
+      const lineColor = colorByHole ? HOLE_COLORS[holeIdx % HOLE_COLORS.length] : "#F1F5EE";
+      holeIdx++;
+
+      const latlngs = holePts.map(p => [p.lat, p.lon]);
+      allLatLngs.push(...latlngs);
+      if (latlngs.length > 1) {
+        L.polyline(latlngs, { color: lineColor, weight: 3, opacity: 0.85, dashArray: "6 5" }).addTo(shotMapLayer);
+      }
+
+      holePts.forEach((p, i) => {
+        const isGreen = p.type === "Green";
+        const cat = isGreen ? "putter" : clubCategory(p.club);
+        const label = isGreen ? "⛳" : String(i + 1);
+        const icon = L.divIcon({
+          className: "",
+          html: `<div style="background:var(--cat-${cat}); width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#0B0F0E; font-weight:800; font-size:12px; border:2px solid #0F1611; box-shadow:0 1px 5px rgba(0,0,0,0.5); font-family:sans-serif;">${label}</div>`,
+          iconSize: [26, 26],
+          iconAnchor: [13, 13]
+        });
+
+        let nextInfo = "";
+        if (!isGreen && p.club && i < holePts.length - 1) {
+          const yards = Math.round(toYards(haversine(p, holePts[i + 1])));
+          nextInfo = `<br>${yards}y to next`;
+        }
+        const popup = `<b>Hole ${holeNum}</b><br>${isGreen ? "On green" : p.club}${nextInfo}<br><span style="color:var(--ink-dim)">±${p.accuracy}m accuracy</span>`;
+
+        L.marker([p.lat, p.lon], { icon }).addTo(shotMapLayer).bindPopup(popup);
+      });
+    });
+
+    map.fitBounds(allLatLngs, { padding: [30, 30], maxZoom: 19 });
+  }
+
   // ---------------- Rendering ----------------
   function renderRoundChips() {
     const row = $("#roundChipRow");
@@ -214,6 +316,10 @@
 
     renderHoleTable(stats);
     renderClubDist("#rdClubDist", stats.clubDistances);
+
+    selectedMapHole = "all";
+    renderMapHoleChips(rd);
+    updateShotMap(rd);
   }
 
   function renderAllTime() {
@@ -280,6 +386,7 @@
     $$(".dash-tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
     $("#tab-round").style.display = tab === "round" ? "" : "none";
     $("#tab-alltime").style.display = tab === "alltime" ? "" : "none";
+    if (tab === "round" && shotMapInstance) setTimeout(() => shotMapInstance.invalidateSize(), 50);
   }
   $$(".dash-tabs button").forEach(btn => btn.addEventListener("click", () => switchTab(btn.dataset.tab)));
 

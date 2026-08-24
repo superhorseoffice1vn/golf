@@ -7,6 +7,8 @@
 <meta name="theme-color" content="#0F1611" />
 <link rel="apple-touch-icon" href="icons/icon-192.png" />
 <link rel="stylesheet" href="css/styles.css" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 </head>
 <body>
 
@@ -62,6 +64,13 @@
           <div class="kpi"><div class="num" id="rdPutts">0</div><div class="lbl">Total putts</div></div>
           <div class="kpi"><div class="num" id="rdHoles">0</div><div class="lbl">Holes played</div></div>
           <div class="kpi"><div class="num" id="rdPuttsHole">0.0</div><div class="lbl">Putts / hole</div></div>
+        </div>
+        <div class="stat-card">
+          <div class="title">Shot Map</div>
+          <div class="round-chip-row" id="mapHoleChips"></div>
+          <div class="map-caption">Numbered = shot order · ⛳ = green marker · tap a pin for details</div>
+          <div class="map-box" id="shotMap"></div>
+          <div class="empty" id="shotMapEmpty" style="display:none;">No GPS points logged for this selection.</div>
         </div>
         <div class="stat-card">
           <div class="title">Hole-by-hole</div>
