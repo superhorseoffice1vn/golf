@@ -33,6 +33,29 @@
     toast._h = setTimeout(() => t.classList.remove("show"), 2200);
   }
 
+  // In-app replacement for window.confirm() — browsers can silently suppress
+  // native confirm() after a few popups ("prevent this page from creating
+  // additional dialogs"), which makes buttons relying on it look broken.
+  // This dialog is just our own DOM, so it can never be blocked that way.
+  function appConfirm(message) {
+    return new Promise((resolve) => {
+      $("#confirmMessage").textContent = message;
+      $("#confirmOverlay").style.display = "flex";
+      const cleanup = (result) => {
+        $("#confirmOverlay").style.display = "none";
+        okBtn.removeEventListener("click", onOk);
+        cancelBtn.removeEventListener("click", onCancel);
+        resolve(result);
+      };
+      const okBtn = $("#confirmOk");
+      const cancelBtn = $("#confirmCancel");
+      const onOk = () => cleanup(true);
+      const onCancel = () => cleanup(false);
+      okBtn.addEventListener("click", onOk);
+      cancelBtn.addEventListener("click", onCancel);
+    });
+  }
+
   function ordinal(n) {
     const s = ["th", "st", "nd", "rd"];
     const v = n % 100;
@@ -272,9 +295,10 @@
     renderRound();
   });
 
-  $("#btnEndRound").addEventListener("click", () => {
+  $("#btnEndRound").addEventListener("click", async () => {
     const round = activeRound(); if (!round) return;
-    if (!confirm("End this round? You can still view it in Stats.")) return;
+    const ok = await appConfirm("End this round? You can still view it in Stats.");
+    if (!ok) return;
     round.ended = true;
     DB.saveRound(round);
     DB.setActiveRoundId(null);
@@ -425,8 +449,9 @@
   });
   $("#newClubInput").addEventListener("keydown", (e) => { if (e.key === "Enter") $("#btnAddClub").click(); });
 
-  $("#btnResetBag").addEventListener("click", () => {
-    if (!confirm("Reset your bag to the standard club set? This removes any custom clubs you've added.")) return;
+  $("#btnResetBag").addEventListener("click", async () => {
+    const ok = await appConfirm("Reset your bag to the standard club set? This removes any custom clubs you've added.");
+    if (!ok) return;
     DB.setBag(DB.getDefaultBag());
     renderBag();
     toast("Bag reset to standard set");
@@ -504,9 +529,10 @@
     });
   }
 
-  function deletePlayer(id) {
+  async function deletePlayer(id) {
     const p = DB.getPlayer(id);
-    if (!confirm(`Remove ${p ? p.name : "this"}'s profile from this device? Their data stays stored but won't be reachable unless re-added.`)) return;
+    const ok = await appConfirm(`Remove ${p ? p.name : "this"}'s profile from this device? Their data stays stored but won't be reachable unless re-added.`);
+    if (!ok) return;
     DB.removePlayer(id);
     if (DB.getActivePlayerId() === id) DB.setActivePlayerId(null);
     renderPlayerPickerList();
@@ -597,8 +623,9 @@
   $("#btnLogin").addEventListener("click", attemptLogin);
   $("#loginPassword").addEventListener("keydown", (e) => { if (e.key === "Enter") attemptLogin(); });
 
-  $("#btnLockApp").addEventListener("click", () => {
-    if (!confirm("Lock the app? You'll need the password to get back in.")) return;
+  $("#btnLockApp").addEventListener("click", async () => {
+    const ok = await appConfirm("Lock the app? You'll need the password to get back in.");
+    if (!ok) return;
     localStorage.removeItem(AUTH_KEY);
     location.reload();
   });
