@@ -21,6 +21,10 @@ const Sync = (() => {
     const r = DB.getRound(roundId);
     return r ? r.course : "";
   }
+  function playerFor(roundId) {
+    const r = DB.getRound(roundId);
+    return r ? (r.playerName || "") : "";
+  }
 
   async function attempt() {
     const settings = DB.getSettings();
@@ -43,6 +47,7 @@ const Sync = (() => {
         roundId: e.roundId,
         timestamp: e.timestamp,
         course: courseFor(e.roundId),
+        player: playerFor(e.roundId),
         hole: e.hole,
         type: e.type,           // "Shot" or "Green"
         club: e.club || "",
@@ -58,6 +63,7 @@ const Sync = (() => {
         roundId: h.roundId,
         timestamp: h.timestamp,
         course: courseFor(h.roundId),
+        player: playerFor(h.roundId),
         hole: h.hole,
         type: "Putts",
         putts: h.putts

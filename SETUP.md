@@ -71,6 +71,16 @@ The Web app URL stays the same — you don't need to update it in the app.
 - Since it shares the same browser storage as the main app, if you're already logged in there, the dashboard unlocks automatically — no separate password entry needed on the same device/browser.
 - **Refresh** button re-fetches from the Sheet — useful right after finishing a round to pull in the latest sync.
 
+## Part 5 — Multiple players
+
+Everyone shares the same app install and the same Google Sheet — the app just tags every shot with a "Player" name so stats never mix between people.
+
+- **First time on a given phone**, if no profile exists yet you'll be asked "Who's playing?" — enter a name and, optionally, a 4-digit PIN. The PIN is a soft local check (like the app password) to stop shots getting logged under the wrong name if a phone gets passed around — it's not real security.
+- Each profile gets its **own bag and round history** on that device — even if two family members ever share one phone, their data stays separate.
+- Switch profiles anytime from **Settings > Switch player**.
+- On the **Dashboard**, a row of player chips appears at the top — pick whose stats to view. It defaults to whichever player is currently active on that device.
+- If you were already using the app solo before this update, your existing data is automatically kept and assigned to a profile called "Me" — nothing is lost.
+
 ## Notes / limitations
 
 - Distance-per-club is calculated as the GPS distance from where you hit a shot to where you hit (or marked) the next one — so tag **On green** when your approach lands, or the last full-swing shot into each green won't get a distance.

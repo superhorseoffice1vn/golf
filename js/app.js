@@ -6,6 +6,8 @@
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
   let pendingShot = null; // {lat, lon, accuracy, timestamp} awaiting club choice
+  let pendingPlayerId = null;
+  let initialPickerFlow = false;
 
   // ---------------- Screen nav ----------------
   function showScreen(name) {
@@ -29,6 +31,12 @@
     t.classList.add("show");
     clearTimeout(toast._h);
     toast._h = setTimeout(() => t.classList.remove("show"), 2200);
+  }
+
+  function ordinal(n) {
+    const s = ["th", "st", "nd", "rd"];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
   }
 
   // ---------------- Geolocation ----------------
@@ -109,6 +117,8 @@
 
   // ---------------- Home ----------------
   function renderHome() {
+    const playerName = DB.getActivePlayerName();
+    $("#homePlayerLine").textContent = playerName ? "Playing as " + playerName : "";
     const activeId = DB.getActiveRoundId();
     const round = activeId ? DB.getRound(activeId) : null;
     const block = $("#continueBlock");
@@ -130,6 +140,7 @@
     const round = {
       id: DB.uid(),
       course,
+      playerName: DB.getActivePlayerName(),
       date: new Date().toISOString(),
       currentHole: 1,
       ended: false
@@ -167,6 +178,9 @@
     const greenBtn = $("#btnOnGreen");
     greenBtn.textContent = hasGreen ? "Green marked ✓ (tap to re-mark)" : "On green — mark spot";
 
+    const shotCount = entries.filter(e => e.type === "Shot").length;
+    $("#btnLogShot .cta").textContent = "Log " + ordinal(shotCount + 1) + " Shot";
+
     const puttsBlock = $("#puttsBlock");
     if (hasGreen) {
       puttsBlock.style.display = "";
@@ -176,7 +190,7 @@
       puttsBlock.style.display = "none";
     }
 
-    $("#captureHint").textContent = "Tap for GPS + club";
+    $("#captureHint").textContent = "Stand at your ball, then tap";
   }
 
   $("#holeMinus").addEventListener("click", () => {
@@ -206,7 +220,7 @@
       openClubPicker();
     } catch (err) {
       btn.classList.remove("acquiring");
-      $("#captureHint").textContent = "Tap for GPS + club";
+      $("#captureHint").textContent = "Stand at your ball, then tap";
       toast("GPS failed: " + (err.message || "check location permission"));
     }
   });
@@ -368,6 +382,7 @@
 
   // ---------------- Settings ----------------
   function renderSettings() {
+    $("#settingsCurrentPlayer").textContent = DB.getActivePlayerName() || "—";
     const settings = DB.getSettings();
     $("#sheetsUrlInput").value = settings.sheetsUrl || "";
     $("#unsyncedCount").textContent = DB.unsyncedCount();
@@ -454,6 +469,113 @@
   }
   Sync.onStatusChange(updatePill);
 
+  // ---------------- Player picker ----------------
+  function openPlayerPicker(cancelable) {
+    renderPlayerPickerList();
+    $("#pinPromptArea").style.display = "none";
+    $("#playerPickerBody").style.display = "";
+    $("#addPlayerForm").style.display = "none";
+    $("#btnPickerCancel").style.display = cancelable ? "" : "none";
+    $("#playerPicker").style.display = "flex";
+  }
+  function closePlayerPicker() { $("#playerPicker").style.display = "none"; }
+
+  function renderPlayerPickerList() {
+    const list = $("#playerList");
+    list.innerHTML = "";
+    const players = DB.getPlayers();
+    players.forEach(p => {
+      const row = document.createElement("div");
+      row.className = "row";
+      const btn = document.createElement("button");
+      btn.className = "btn block";
+      btn.textContent = p.name + (p.pin ? " 🔒" : "");
+      btn.addEventListener("click", () => attemptSelectPlayer(p.id));
+      row.appendChild(btn);
+      if (players.length > 1) {
+        const del = document.createElement("button");
+        del.className = "btn danger-ghost";
+        del.style.width = "auto";
+        del.textContent = "✕";
+        del.addEventListener("click", (e) => { e.stopPropagation(); deletePlayer(p.id); });
+        row.appendChild(del);
+      }
+      list.appendChild(row);
+    });
+  }
+
+  function deletePlayer(id) {
+    const p = DB.getPlayer(id);
+    if (!confirm(`Remove ${p ? p.name : "this"}'s profile from this device? Their data stays stored but won't be reachable unless re-added.`)) return;
+    DB.removePlayer(id);
+    if (DB.getActivePlayerId() === id) DB.setActivePlayerId(null);
+    renderPlayerPickerList();
+    if (!DB.getActivePlayerId()) $("#btnPickerCancel").style.display = "none";
+  }
+
+  function attemptSelectPlayer(id) {
+    const p = DB.getPlayer(id);
+    if (!p) return;
+    if (!p.pin) { finalizeSelectPlayer(id); return; }
+    pendingPlayerId = id;
+    $("#pinPromptName").textContent = "Enter PIN for " + p.name;
+    $("#pinInput").value = "";
+    $("#pinError").classList.remove("show");
+    $("#playerPickerBody").style.display = "none";
+    $("#pinPromptArea").style.display = "";
+    $("#pinInput").focus();
+  }
+
+  function confirmPin() {
+    const p = DB.getPlayer(pendingPlayerId);
+    if (!p) return;
+    if ($("#pinInput").value === p.pin) {
+      finalizeSelectPlayer(p.id);
+    } else {
+      $("#pinError").classList.add("show");
+      $("#pinInput").value = "";
+      $("#pinInput").focus();
+    }
+  }
+  $("#btnPinConfirm").addEventListener("click", confirmPin);
+  $("#pinInput").addEventListener("keydown", (e) => { if (e.key === "Enter") confirmPin(); });
+  $("#btnPinCancel").addEventListener("click", () => {
+    $("#pinPromptArea").style.display = "none";
+    $("#playerPickerBody").style.display = "";
+  });
+  $("#btnPickerCancel").addEventListener("click", () => closePlayerPicker());
+
+  $("#btnAddPlayerToggle").addEventListener("click", () => {
+    const f = $("#addPlayerForm");
+    f.style.display = f.style.display === "none" ? "" : "none";
+  });
+  $("#btnAddPlayerConfirm").addEventListener("click", () => {
+    const name = $("#newPlayerName").value.trim();
+    const pin = $("#newPlayerPin").value.trim();
+    if (!name) { toast("Enter a name"); return; }
+    if (pin && !/^\d{4}$/.test(pin)) { toast("PIN must be 4 digits, or leave it blank"); return; }
+    const player = DB.addPlayer(name, pin);
+    $("#newPlayerName").value = ""; $("#newPlayerPin").value = "";
+    $("#addPlayerForm").style.display = "none";
+    finalizeSelectPlayer(player.id);
+  });
+
+  function finalizeSelectPlayer(id) {
+    DB.setActivePlayerId(id);
+    closePlayerPicker();
+    if (initialPickerFlow) {
+      initialPickerFlow = false;
+      $("#appRoot").style.display = "";
+      boot();
+    } else {
+      pendingShot = null;
+      toast("Switched to " + DB.getActivePlayerName());
+      showScreen("home");
+    }
+  }
+
+  $("#btnSwitchPlayer").addEventListener("click", () => { openPlayerPicker(true); });
+
   // ---------------- Login ----------------
   const AUTH_KEY = "fl_authed";
   const APP_PASSWORD = "shsh";
@@ -475,16 +597,21 @@
   $("#btnLogin").addEventListener("click", attemptLogin);
   $("#loginPassword").addEventListener("keydown", (e) => { if (e.key === "Enter") attemptLogin(); });
 
-  $("#btnLogout").addEventListener("click", () => {
-    if (!confirm("Log out? You'll need the password to get back in.")) return;
+  $("#btnLockApp").addEventListener("click", () => {
+    if (!confirm("Lock the app? You'll need the password to get back in.")) return;
     localStorage.removeItem(AUTH_KEY);
     location.reload();
   });
 
   function enterApp() {
     $("#loginScreen").style.display = "none";
-    $("#appRoot").style.display = "";
-    boot();
+    if (!DB.getActivePlayerId()) {
+      initialPickerFlow = true;
+      openPlayerPicker(false);
+    } else {
+      $("#appRoot").style.display = "";
+      boot();
+    }
   }
 
   // ---------------- Boot ----------------

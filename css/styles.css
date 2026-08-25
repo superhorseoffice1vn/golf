@@ -275,6 +275,7 @@ input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
     var(--bg);
 }
 .login-card {
+  position: relative;
   width: 100%;
   max-width: 340px;
   background: var(--panel);

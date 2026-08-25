@@ -25,6 +25,34 @@
   </div>
 </div>
 
+<!-- ============ PLAYER PICKER ============ -->
+<div class="login-wrap" id="playerPicker" style="display:none;">
+  <div class="login-card">
+    <button class="btn ghost" id="btnPickerCancel" style="display:none; width:auto; padding:6px 12px; font-size:12px; position:absolute; top:16px; right:16px;">✕</button>
+    <div class="login-badge">👤</div>
+    <div class="login-title">Who's playing?</div>
+    <div class="login-by">Pick your profile on this device</div>
+
+    <div id="playerPickerBody">
+      <div id="playerList" class="stack" style="margin-bottom:14px;"></div>
+      <button class="btn ghost block" id="btnAddPlayerToggle">+ Add new player</button>
+      <div id="addPlayerForm" style="display:none; margin-top:14px;">
+        <input type="text" id="newPlayerName" placeholder="Name" autocomplete="off" style="margin-bottom:10px;" />
+        <input type="text" id="newPlayerPin" placeholder="4-digit PIN (optional)" inputmode="numeric" maxlength="4" autocomplete="off" style="margin-bottom:10px;" />
+        <button class="btn confirm block" id="btnAddPlayerConfirm">Create profile</button>
+      </div>
+    </div>
+
+    <div id="pinPromptArea" style="display:none;">
+      <div class="login-by" id="pinPromptName">Enter PIN</div>
+      <input type="password" id="pinInput" inputmode="numeric" maxlength="4" placeholder="PIN" autocomplete="off" />
+      <button class="btn primary block" id="btnPinConfirm">Unlock profile</button>
+      <button class="btn ghost block" id="btnPinCancel" style="margin-top:8px;">Back</button>
+      <div class="login-error" id="pinError">Incorrect PIN</div>
+    </div>
+  </div>
+</div>
+
 <!-- ============ APP ============ -->
 <div id="appRoot" style="display:none;">
 
@@ -37,6 +65,7 @@
 <section class="screen" id="screen-home">
   <div class="hero-title">Round setup</div>
   <div class="hero-sub">Log the course, start playing.</div>
+  <div class="course-chip" id="homePlayerLine" style="margin-bottom:18px;"></div>
 
   <div id="continueBlock" class="stack" style="display:none; margin-bottom:22px;">
     <div class="field-label">Round in progress</div>
@@ -75,7 +104,7 @@
       <div class="dimple" style="top:30%; left:38%;"></div>
       <div class="dimple" style="top:55%; left:60%;"></div>
       <div class="dimple" style="top:65%; left:35%;"></div>
-      <span class="cta">Log shot</span>
+      <span class="cta">Log 1st Shot</span>
     </button>
     <div class="capture-hint" id="captureHint">Tap for GPS + club</div>
   </div>
@@ -130,6 +159,14 @@
 <section class="screen" id="screen-settings">
   <div class="hero-title">Settings</div>
 
+  <div class="section-title">Player</div>
+  <div class="stat-card" style="margin-bottom:20px;">
+    <div class="title">Playing as</div>
+    <div id="settingsCurrentPlayer" style="font-size:18px; font-weight:800; margin-bottom:12px;">—</div>
+    <button class="btn ghost block" id="btnLockApp" style="margin-bottom:8px;">Lock app</button>
+    <button class="btn danger-ghost block" id="btnSwitchPlayer">Switch player (new name + PIN)</button>
+  </div>
+
   <div class="section-title">Google Sheets sync</div>
   <div class="stack" style="margin-bottom:8px;">
     <div class="field-label">Apps Script Web App URL</div>
@@ -149,9 +186,6 @@
 
   <div class="section-title">Dashboard</div>
   <a href="dashboard.html" class="btn confirm block" style="display:block; text-decoration:none; margin-bottom:20px;">Open Round Dashboard ↗</a>
-
-  <div class="section-title">Account</div>
-  <button class="btn danger-ghost block" id="btnLogout">Log out</button>
 </section>
 
 <div class="toast" id="toast"></div>

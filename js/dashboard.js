@@ -10,8 +10,10 @@
   const SETTINGS_KEY = "fl_settings"; // same key the phone app uses — shares config automatically
   const DEFAULT_SHEETS_URL = "https://script.google.com/macros/s/AKfycbzDu5QNAKlVtM8BGY6pw97XzBQ6sjwvZyB3o9MVY8N3sKtFD9koD-4eC3h3mCWLw3Em-A/exec";
 
-  let rounds = [];          // grouped rounds, most recent first
+  let allRows = [];         // every normalized row from the sheet, all players
+  let rounds = [];          // grouped rounds for the SELECTED player only, most recent first
   let selectedRoundKey = null;
+  let selectedPlayer = null;
   let selectedMapHole = "all";
   let shotMapInstance = null;
   let shotMapLayer = null;
@@ -92,8 +94,20 @@
       accuracy: r["Accuracy (m)"] !== "" && r["Accuracy (m)"] != null ? Number(r["Accuracy (m)"]) : null,
       putts: r["Putts"] !== "" && r["Putts"] != null ? Number(r["Putts"]) : null,
       entryId: r["Entry ID"] || "",
-      roundId: r["Round ID"] || ""
+      roundId: r["Round ID"] || "",
+      player: r["Player"] || "Unknown"
     })).filter(r => r.timestamp instanceof Date && !isNaN(r.timestamp));
+  }
+
+  // Same-origin as the main app, so this device's active player (if any) is a
+  // sensible default filter — no need to make the person pick every time.
+  function getLocalActivePlayerName() {
+    try {
+      const activeId = JSON.parse(localStorage.getItem("fl_active_player"));
+      const players = JSON.parse(localStorage.getItem("fl_players")) || [];
+      const p = players.find(pl => pl.id === activeId);
+      return p ? p.name : null;
+    } catch (e) { return null; }
   }
 
   // Group rows into rounds. Prefer explicit Round ID (new data); rows synced
@@ -253,6 +267,38 @@
   }
 
   // ---------------- Rendering ----------------
+  function renderPlayerChips(players) {
+    const row = $("#playerChipRow");
+    row.innerHTML = "";
+    players.forEach(name => {
+      const chip = document.createElement("button");
+      chip.className = "round-chip" + (name === selectedPlayer ? " active" : "");
+      chip.textContent = name;
+      chip.addEventListener("click", () => { selectedPlayer = name; applyPlayerFilter(); });
+      row.appendChild(chip);
+    });
+  }
+
+  function applyPlayerFilter() {
+    const players = [...new Set(allRows.map(r => r.player))].sort();
+    renderPlayerChips(players);
+
+    rounds = groupRounds(allRows.filter(r => r.player === selectedPlayer));
+
+    if (rounds.length === 0) {
+      $("#dashContent").style.display = "none";
+      $("#dashError").style.display = "";
+      $("#dashErrorMsg").textContent = selectedPlayer + " hasn't logged any rounds yet.";
+      return;
+    }
+    $("#dashContent").style.display = "";
+    $("#dashError").style.display = "none";
+    renderRoundChips();
+    selectRound(rounds[0].key);
+    renderAllTime();
+  }
+
+
   function renderRoundChips() {
     const row = $("#roundChipRow");
     row.innerHTML = "";
@@ -423,11 +469,11 @@
       const data = await res.json();
       if (data.status !== "ok") throw new Error(data.message || "Server error");
 
-      const allRows = normalizeRows(data.rows || []);
-      rounds = groupRounds(allRows);
+      allRows = normalizeRows(data.rows || []);
       $("#dashLoading").style.display = "none";
 
-      if (rounds.length === 0) {
+      const players = [...new Set(allRows.map(r => r.player))].sort();
+      if (players.length === 0) {
         $("#dashError").style.display = "";
         $("#dashErrorMsg").textContent = "No rounds logged yet — play a round in the app first, then refresh here.";
         $("#syncPill").className = "sync-pill dot synced";
@@ -435,14 +481,16 @@
         return;
       }
 
-      $("#dashContent").style.display = "";
+      const localDefault = getLocalActivePlayerName();
+      if (!selectedPlayer || !players.includes(selectedPlayer)) {
+        selectedPlayer = (localDefault && players.includes(localDefault)) ? localDefault : players[0];
+      }
+
       $("#lastUpdated").textContent = "Updated " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       $("#syncPill").className = "sync-pill dot synced";
       $("#syncPill").textContent = "Live";
 
-      renderRoundChips();
-      selectRound(rounds[0].key);
-      renderAllTime();
+      applyPlayerFilter();
     } catch (err) {
       $("#dashLoading").style.display = "none";
       $("#dashError").style.display = "";
