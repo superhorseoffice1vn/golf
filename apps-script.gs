@@ -24,7 +24,7 @@ const SHEET_NAME = "GolfLog";
 // "Round ID" is appended at the END on purpose — if you already had data logged
 // under an older version of this script (10 columns, no Round ID), appending a
 // new column at the end keeps every existing column position unchanged.
-const HEADERS = ["Timestamp", "Course", "Hole", "Type", "Club", "Lat", "Lon", "Accuracy (m)", "Putts", "Entry ID", "Round ID", "Player"];
+const HEADERS = ["Timestamp", "Course", "Hole", "Type", "Club", "Lat", "Lon", "Accuracy (m)", "Putts", "Entry ID", "Round ID", "Player", "Strokes"];
 const ENTRY_ID_COL = HEADERS.indexOf("Entry ID") + 1; // 1-based
 
 function getSheet_() {
@@ -81,7 +81,8 @@ function doPost(e) {
         r.putts != null ? r.putts : "",
         r.id || "",
         r.roundId || "",
-        r.player || ""
+        r.player || "",
+        r.strokes != null && r.strokes !== "" ? r.strokes : ""
       ]);
     });
 

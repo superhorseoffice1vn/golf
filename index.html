@@ -109,10 +109,17 @@
     <div class="capture-hint" id="captureHint">Tap for GPS + club</div>
   </div>
 
-  <button class="btn block" id="btnOnGreen" style="margin-bottom:18px;">On green — mark spot</button>
+  <button class="btn block" id="btnOnGreen" style="margin-bottom:8px;">On green — mark spot</button>
+  <button class="link-btn" id="btnSkipTeeShot" style="display:none; margin:0 0 18px;">Forgot to log your tee shot? Skip →</button>
 
   <div class="putts-block" id="puttsBlock" style="display:none;">
-    <div class="field-label" style="text-align:center;">Putts this hole</div>
+    <div class="field-label" style="text-align:center;">Strokes this hole</div>
+    <div class="putts-control">
+      <button id="strokesMinus">−</button>
+      <div class="count" id="strokesCount">0</div>
+      <button id="strokesPlus">+</button>
+    </div>
+    <div class="field-label" style="text-align:center; margin-top:14px;">Putts this hole</div>
     <div class="putts-control">
       <button id="puttsMinus">−</button>
       <div class="count" id="puttsCount">0</div>

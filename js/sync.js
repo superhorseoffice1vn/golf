@@ -66,7 +66,8 @@ const Sync = (() => {
         player: playerFor(h.roundId),
         hole: h.hole,
         type: "Putts",
-        putts: h.putts
+        putts: h.putts,
+        strokes: h.strokes != null ? h.strokes : ""
       });
     });
 

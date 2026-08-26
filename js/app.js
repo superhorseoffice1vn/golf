@@ -6,6 +6,7 @@
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
   let pendingShot = null; // {lat, lon, accuracy, timestamp} awaiting club choice
+  const skippedTeeShotHoles = new Set(); // "roundId:hole" — unlocks On Green when the tee shot was missed
   let pendingPlayerId = null;
   let initialPickerFlow = false;
 
@@ -183,7 +184,7 @@
     const round = activeRound();
     if (!round) { showScreen("home"); return; }
 
-    $("#roundCourseChip").textContent = round.course + " · " + new Date(round.date).toLocaleDateString();
+    $("#roundCourseChip").textContent = round.course + " · " + new Date(round.date).toLocaleDateString() + " " + new Date(round.date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     $("#holeNum").textContent = round.currentHole;
 
     const entries = DB.entriesForHole(round.id, round.currentHole);
@@ -198,10 +199,23 @@
     });
 
     const hasGreen = entries.some(e => e.type === "Green");
-    const greenBtn = $("#btnOnGreen");
-    greenBtn.textContent = hasGreen ? "Green marked ✓ (tap to re-mark)" : "On green — mark spot";
-
     const shotCount = entries.filter(e => e.type === "Shot").length;
+    const skipKey = round.id + ":" + round.currentHole;
+    const teeShotReady = shotCount > 0 || skippedTeeShotHoles.has(skipKey);
+
+    const greenBtn = $("#btnOnGreen");
+    const skipLink = $("#btnSkipTeeShot");
+    if (teeShotReady) {
+      greenBtn.style.display = "";
+      skipLink.style.display = "none";
+      greenBtn.textContent = hasGreen ? "Green marked ✓ (tap to re-mark)" : "On green — mark spot";
+    } else {
+      // First action of every hole must be a tee shot — hide the green marker
+      // until one's logged, so it can't be tapped out of order by accident.
+      greenBtn.style.display = "none";
+      skipLink.style.display = "";
+    }
+
     $("#btnLogShot .cta").textContent = "Log " + ordinal(shotCount + 1) + " Shot";
 
     const puttsBlock = $("#puttsBlock");
@@ -209,6 +223,11 @@
       puttsBlock.style.display = "";
       const existing = DB.getHoleSummary(round.id, round.currentHole);
       $("#puttsCount").textContent = existing ? existing.putts : 0;
+      // Strokes defaults to shots+putts, but only when not already explicitly
+      // saved for this hole — once set, it's independent of further edits.
+      $("#strokesCount").textContent = existing && existing.strokes != null
+        ? existing.strokes
+        : shotCount + (existing ? existing.putts : 0);
     } else {
       puttsBlock.style.display = "none";
     }
@@ -248,6 +267,13 @@
     }
   });
 
+  $("#btnSkipTeeShot").addEventListener("click", () => {
+    const round = activeRound(); if (!round) return;
+    skippedTeeShotHoles.add(round.id + ":" + round.currentHole);
+    toast("OK — adjust Strokes below to include the shot you missed");
+    renderRound();
+  });
+
   $("#btnOnGreen").addEventListener("click", async () => {
     const round = activeRound(); if (!round) return;
     const btn = $("#btnOnGreen");
@@ -271,6 +297,13 @@
     }
   });
 
+  // Strokes stepper — defaults to shots+putts but is independently editable,
+  // so penalty strokes, miscounts, or a missed tee-shot log can be corrected
+  // without touching the underlying GPS shot data used for club distances.
+  function getStrokes() { return parseInt($("#strokesCount").textContent, 10) || 0; }
+  $("#strokesMinus").addEventListener("click", () => { $("#strokesCount").textContent = Math.max(0, getStrokes() - 1); });
+  $("#strokesPlus").addEventListener("click", () => { $("#strokesCount").textContent = Math.min(20, getStrokes() + 1); });
+
   // Putts stepper
   function getPutts() { return parseInt($("#puttsCount").textContent, 10) || 0; }
   $("#puttsMinus").addEventListener("click", () => { $("#puttsCount").textContent = Math.max(0, getPutts() - 1); });
@@ -279,10 +312,11 @@
   $("#btnFinishHole").addEventListener("click", () => {
     const round = activeRound(); if (!round) return;
     const putts = getPutts();
+    const strokes = getStrokes();
     const existing = DB.getHoleSummary(round.id, round.currentHole);
     DB.saveHoleSummary({
       id: existing ? existing.id : DB.uid(),
-      roundId: round.id, hole: round.currentHole, putts,
+      roundId: round.id, hole: round.currentHole, putts, strokes,
       timestamp: Date.now(), synced: false
     });
     Sync.attempt();
@@ -376,16 +410,30 @@
 
     const dist = Stats.clubDistances();
     const list = $("#clubStatsList");
-    const clubs = Object.keys(dist).sort((a, b) => dist[b].avg - dist[a].avg);
+    // Sort by full-swing avg where available, else by short-shot avg
+    const clubs = Object.keys(dist).sort((a, b) => {
+      const av = dist[a].full ? dist[a].full.avg : dist[a].short.avg;
+      const bv = dist[b].full ? dist[b].full.avg : dist[b].short.avg;
+      return bv - av;
+    });
     if (clubs.length === 0) {
       list.innerHTML = '<div class="empty">Log a few shots to see distances here.</div>';
     } else {
       list.innerHTML = clubs.map(c => {
         const d = dist[c];
-        return `<div class="club-stat-row">
-          <span class="name">${c}</span>
-          <span><span class="avg">${Math.round(d.avg)}y</span><span class="range">${Math.round(d.min)}–${Math.round(d.max)} · n=${d.count}</span></span>
+        const main = d.full || d.short; // if no clean full-swing cluster, show what we have
+        const mainLabel = d.full ? "" : " (short shots only)";
+        let html = `<div class="club-stat-row">
+          <span class="name">${c}${mainLabel}</span>
+          <span><span class="avg">${Math.round(main.avg)}y</span><span class="range">${Math.round(main.min)}–${Math.round(main.max)} · n=${main.count}</span></span>
         </div>`;
+        if (d.full && d.short) {
+          html += `<div class="club-stat-row" style="padding-top:0; opacity:0.75;">
+            <span class="name" style="font-weight:400; font-size:12px; padding-left:10px;">↳ Short shots</span>
+            <span><span class="range">${Math.round(d.short.avg)}y avg · n=${d.short.count}</span></span>
+          </div>`;
+        }
+        return html;
       }).join("");
     }
 
@@ -397,7 +445,7 @@
       roundsList.innerHTML = rounds.map(r => {
         const s = Stats.roundSummary(r.id);
         return `<div class="club-stat-row">
-          <span class="name">${r.course}<br><span class="range">${new Date(r.date).toLocaleDateString()}</span></span>
+          <span class="name">${r.course}<br><span class="range">${new Date(r.date).toLocaleDateString()} ${new Date(r.date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></span>
           <span><span class="avg">${s.totalStrokes}</span><span class="range">${s.totalPutts} putts</span></span>
         </div>`;
       }).join("");

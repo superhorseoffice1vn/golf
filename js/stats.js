@@ -15,6 +15,36 @@ const Stats = (() => {
 
   function metersToYards(m) { return m * 1.09361; }
 
+  // A club like a 7-iron gets hit both full-swing (approach shots) and as a
+  // partial pitch/chip around the green — averaging both together produces a
+  // meaningless blended number. Rather than treat short shots as statistical
+  // "outliers" around one mean (they're not noise, they're a genuinely
+  // different shot type), split on the largest proportional gap in the
+  // sorted distances: full-swing and finesse shots for the same club are
+  // normally many multiples apart, while natural full-swing variance from
+  // wind/lie isn't. Below that gap threshold, treat it as one cohesive group.
+  const FULL_SWING_GAP_RATIO = 1.6;
+
+  function splitFullSwing(yards) {
+    const arr = yards.slice().sort((a, b) => a - b);
+    if (arr.length < 2) return { full: arr, short: [] };
+    let splitIdx = -1, maxRatio = 1;
+    for (let i = 0; i < arr.length - 1; i++) {
+      const ratio = arr[i + 1] / arr[i];
+      if (ratio > maxRatio) { maxRatio = ratio; splitIdx = i; }
+    }
+    if (maxRatio >= FULL_SWING_GAP_RATIO) {
+      return { full: arr.slice(splitIdx + 1), short: arr.slice(0, splitIdx + 1) };
+    }
+    return { full: arr, short: [] };
+  }
+
+  function summarize(arr) {
+    if (!arr.length) return null;
+    const sum = arr.reduce((a, b) => a + b, 0);
+    return { count: arr.length, avg: sum / arr.length, min: arr[0], max: arr[arr.length - 1] };
+  }
+
   // Distance for a shot = distance from that shot's location to the NEXT
   // logged point in the same hole (next shot, or the green marker).
   // The final point in a hole (green marker, or last shot if no green
@@ -45,15 +75,9 @@ const Stats = (() => {
 
     const out = {};
     Object.keys(byClub).forEach(club => {
-      const arr = byClub[club].map(metersToYards).sort((a, b) => a - b);
-      const sum = arr.reduce((a, b) => a + b, 0);
-      out[club] = {
-        count: arr.length,
-        avg: sum / arr.length,
-        min: arr[0],
-        max: arr[arr.length - 1],
-        median: arr[Math.floor(arr.length / 2)]
-      };
+      const yards = byClub[club].map(metersToYards);
+      const { full, short } = splitFullSwing(yards);
+      out[club] = { full: summarize(full), short: summarize(short) };
     });
     return out;
   }
@@ -64,13 +88,21 @@ const Stats = (() => {
     const holeSummaries = DB.holesForRound(roundId);
     const totalPutts = holeSummaries.reduce((s, h) => s + (h.putts || 0), 0);
     const totalShots = entries.filter(e => e.type === "Shot").length;
+    // Prefer each hole's explicit strokes value (may have been manually
+    // corrected — penalty strokes, a missed tee-shot log, etc.) over the
+    // raw shots+putts count, falling back to that count when not set.
+    const totalStrokes = holeSummaries.reduce((s, h) => {
+      if (h.strokes != null) return s + h.strokes;
+      const shotsThisHole = entries.filter(e => e.hole === h.hole && e.type === "Shot").length;
+      return s + shotsThisHole + (h.putts || 0);
+    }, 0);
     const clubCounts = {};
     entries.forEach(e => {
       if (e.type === "Shot" && e.club) clubCounts[e.club] = (clubCounts[e.club] || 0) + 1;
     });
     return {
       holesPlayed: holeNums.length,
-      totalStrokes: totalShots + totalPutts,
+      totalStrokes,
       totalShots,
       totalPutts,
       puttsPerHole: holeSummaries.length ? totalPutts / holeSummaries.length : 0,

@@ -82,6 +82,31 @@
   }
   const toYards = (m) => m * 1.09361;
 
+  // A club like a 7-iron gets hit both full-swing (approach shots) and as a
+  // partial pitch/chip around the green — averaging both together produces a
+  // meaningless blended number. Split on the largest proportional gap in the
+  // sorted distances rather than treating short shots as statistical
+  // "outliers": they're a genuinely different shot type, not noise.
+  const FULL_SWING_GAP_RATIO = 1.6;
+  function splitFullSwing(yards) {
+    const arr = yards.slice().sort((a, b) => a - b);
+    if (arr.length < 2) return { full: arr, short: [] };
+    let splitIdx = -1, maxRatio = 1;
+    for (let i = 0; i < arr.length - 1; i++) {
+      const ratio = arr[i + 1] / arr[i];
+      if (ratio > maxRatio) { maxRatio = ratio; splitIdx = i; }
+    }
+    if (maxRatio >= FULL_SWING_GAP_RATIO) {
+      return { full: arr.slice(splitIdx + 1), short: arr.slice(0, splitIdx + 1) };
+    }
+    return { full: arr, short: [] };
+  }
+  function summarize(arr) {
+    if (!arr.length) return null;
+    const sum = arr.reduce((a, b) => a + b, 0);
+    return { count: arr.length, avg: sum / arr.length, min: arr[0], max: arr[arr.length - 1] };
+  }
+
   function normalizeRows(raw) {
     return raw.map(r => ({
       timestamp: r["Timestamp"] ? new Date(r["Timestamp"]) : null,
@@ -93,6 +118,7 @@
       lon: r["Lon"] !== "" && r["Lon"] != null ? Number(r["Lon"]) : null,
       accuracy: r["Accuracy (m)"] !== "" && r["Accuracy (m)"] != null ? Number(r["Accuracy (m)"]) : null,
       putts: r["Putts"] !== "" && r["Putts"] != null ? Number(r["Putts"]) : null,
+      strokes: r["Strokes"] !== "" && r["Strokes"] != null ? Number(r["Strokes"]) : null,
       entryId: r["Entry ID"] || "",
       roundId: r["Round ID"] || "",
       player: r["Player"] || "Unknown"
@@ -140,7 +166,10 @@
       const shots = holeRows.filter(r => r.type === "Shot").length;
       const puttsRow = holeRows.find(r => r.type === "Putts");
       const putts = puttsRow ? (puttsRow.putts || 0) : 0;
-      perHole[h] = { shots, putts, strokes: shots + putts };
+      // Prefer the explicit strokes override (penalty strokes, a missed
+      // tee-shot log, etc.) when it was set; fall back to shots+putts.
+      const strokes = (puttsRow && puttsRow.strokes != null) ? puttsRow.strokes : shots + putts;
+      perHole[h] = { shots, putts, strokes };
 
       const posRows = holeRows.filter(r => (r.type === "Shot" || r.type === "Green") && r.lat != null && r.lon != null);
       for (let i = 0; i < posRows.length - 1; i++) {
@@ -159,9 +188,9 @@
 
     const clubDistances = {};
     Object.keys(clubRaw).forEach(c => {
-      const arr = clubRaw[c].slice().sort((a, b) => a - b);
-      const sum = arr.reduce((a, b) => a + b, 0);
-      clubDistances[c] = { count: arr.length, avg: sum / arr.length, min: arr[0], max: arr[arr.length - 1], raw: arr };
+      const yards = clubRaw[c];
+      const { full, short } = splitFullSwing(yards);
+      clubDistances[c] = { raw: yards, full: summarize(full), short: summarize(short) };
     });
 
     return { holesSet, perHole, totalStrokes, totalPutts, holesPlayed: holesSet.length, clubDistances };
@@ -305,7 +334,7 @@
     rounds.forEach(rd => {
       const chip = document.createElement("button");
       chip.className = "round-chip" + (rd.key === selectedRoundKey ? " active" : "");
-      chip.textContent = (rd.course || "Round") + " · " + rd.date.toLocaleDateString();
+      chip.textContent = (rd.course || "Round") + " · " + rd.date.toLocaleDateString() + " " + rd.date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
       chip.addEventListener("click", () => selectRound(rd.key));
       row.appendChild(chip);
     });
@@ -313,23 +342,38 @@
 
   function renderClubDist(sel, dist) {
     const el = $(sel);
-    const clubs = Object.keys(dist).sort((a, b) => dist[b].avg - dist[a].avg);
+    const clubs = Object.keys(dist).sort((a, b) => {
+      const av = dist[a].full ? dist[a].full.avg : dist[a].short.avg;
+      const bv = dist[b].full ? dist[b].full.avg : dist[b].short.avg;
+      return bv - av;
+    });
     if (clubs.length === 0) {
       el.innerHTML = '<div class="empty">No shots logged with GPS.</div>';
       return;
     }
-    const maxAvg = Math.max(...clubs.map(c => dist[c].avg));
+    const maxAvg = Math.max(...clubs.map(c => (dist[c].full || dist[c].short).avg));
     el.innerHTML = clubs.map(c => {
       const d = dist[c];
+      const main = d.full || d.short;
+      const mainLabel = d.full ? "" : " (short shots only)";
       const cat = clubCategory(c);
-      const pct = Math.max(6, Math.round((d.avg / maxAvg) * 100));
-      return `<div class="dist-row">
+      const pct = Math.max(6, Math.round((main.avg / maxAvg) * 100));
+      let html = `<div class="dist-row">
         <div class="dist-bar" style="width:${pct}%; background:var(--cat-${cat})"></div>
         <div class="dist-row-content">
-          <span class="name"><span class="dot" style="background:var(--cat-${cat})"></span>${c}</span>
-          <span><span class="avg">${Math.round(d.avg)}y</span><span class="range">${Math.round(d.min)}–${Math.round(d.max)} · n=${d.count}</span></span>
+          <span class="name"><span class="dot" style="background:var(--cat-${cat})"></span>${c}${mainLabel}</span>
+          <span><span class="avg">${Math.round(main.avg)}y</span><span class="range">${Math.round(main.min)}–${Math.round(main.max)} · n=${main.count}</span></span>
         </div>
       </div>`;
+      if (d.full && d.short) {
+        html += `<div class="dist-row" style="padding-top:0; opacity:0.7;">
+          <div class="dist-row-content">
+            <span class="name" style="font-weight:400; font-size:12px; padding-left:16px;">↳ Short shots</span>
+            <span><span class="range">${Math.round(d.short.avg)}y avg · n=${d.short.count}</span></span>
+          </div>
+        </div>`;
+      }
+      return html;
     }).join("");
   }
 
@@ -352,7 +396,7 @@
     if (!rd) return;
 
     $("#rdCourse").textContent = rd.course || "Round";
-    $("#rdDate").textContent = rd.date.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+    $("#rdDate").textContent = rd.date.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" }) + " · " + rd.date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
     const stats = computeRoundStats(rd.rows);
     $("#rdStrokes").textContent = stats.totalStrokes;
@@ -399,7 +443,9 @@
       labels.appendChild(lbl);
     });
 
-    // Aggregate club distances across ALL rounds (concat raw yards, not average-of-averages)
+    // Aggregate club distances across ALL rounds (concat raw yards, then
+    // re-cluster on the combined set — more data can reveal a full/short
+    // split that wasn't visible within any single round).
     const allRaw = {};
     roundStats.forEach(x => {
       Object.keys(x.stats.clubDistances).forEach(c => {
@@ -409,9 +455,8 @@
     });
     const atDist = {};
     Object.keys(allRaw).forEach(c => {
-      const arr = allRaw[c].slice().sort((a, b) => a - b);
-      const sum = arr.reduce((a, b) => a + b, 0);
-      atDist[c] = { count: arr.length, avg: sum / arr.length, min: arr[0], max: arr[arr.length - 1] };
+      const { full, short } = splitFullSwing(allRaw[c]);
+      atDist[c] = { full: summarize(full), short: summarize(short) };
     });
     renderClubDist("#atClubDist", atDist);
 
@@ -419,7 +464,7 @@
     const listEl = $("#atRoundsList");
     listEl.innerHTML = roundStats.map(x => `
       <div class="club-stat-row" data-key="${x.rd.key}" style="cursor:pointer;">
-        <span class="name">${x.rd.course || "Round"}<br><span class="range">${x.rd.date.toLocaleDateString()}</span></span>
+        <span class="name">${x.rd.course || "Round"}<br><span class="range">${x.rd.date.toLocaleDateString()} ${x.rd.date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></span>
         <span><span class="avg">${x.stats.totalStrokes}</span><span class="range">${x.stats.totalPutts} putts</span></span>
       </div>
     `).join("") || '<div class="empty">No rounds yet.</div>';

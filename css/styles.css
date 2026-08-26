@@ -9,10 +9,10 @@
   --accent-ink: #1A1400;
   --fairway: #4C8B52;     /* secondary / confirm */
   --danger: #D9694F;
-  --cat-wood: #F2A93C;    /* driver/woods/hybrids — amber, power */
-  --cat-iron: #6E9BC7;    /* irons — steel blue, precision */
-  --cat-wedge: #D9784F;   /* wedges — terracotta, spin/short game */
-  --cat-putter: #4C8B52;  /* putter — fairway green, on the green */
+  --cat-wood: #E0473F;    /* driver/woods/hybrids — red */
+  --cat-iron: #4F8FD1;    /* irons — blue */
+  --cat-wedge: #E8821F;   /* wedges — orange */
+  --cat-putter: #4C8B52;  /* putter — green */
   --cat-other: #9CAB9F;   /* custom/uncategorized clubs */
   --mono: "SF Mono", "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
   --sans: -apple-system, "Inter", "Segoe UI", Roboto, sans-serif;
@@ -205,9 +205,9 @@ input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .club-grid button.cat-putter { border-left-color: var(--cat-putter); }
 .club-grid button.cat-other  { border-left-color: var(--cat-other); }
 
-.club-grid button.cat-wood:active   { background: var(--cat-wood);   color: #1A1400; }
-.club-grid button.cat-iron:active   { background: var(--cat-iron);   color: #06131C; }
-.club-grid button.cat-wedge:active  { background: var(--cat-wedge);  color: #200D02; }
+.club-grid button.cat-wood:active   { background: var(--cat-wood);   color: #FFFFFF; }
+.club-grid button.cat-iron:active   { background: var(--cat-iron);   color: #FFFFFF; }
+.club-grid button.cat-wedge:active  { background: var(--cat-wedge);  color: #1F0D02; }
 .club-grid button.cat-putter:active { background: var(--cat-putter); color: #06170A; }
 .club-grid button.cat-other:active  { background: var(--cat-other);  color: #0B120C; }
 
@@ -339,6 +339,12 @@ input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .confirm-card .row { gap: 10px; }
 .confirm-card .row button { flex: 1; }
 .btn.danger-solid { background: var(--danger); color: #1F0904; border-color: var(--danger); font-weight: 700; }
+
+.link-btn {
+  display: block; width: 100%; text-align: center;
+  background: none; border: none; color: var(--ink-dim); font-size: 12px;
+  text-decoration: underline; padding: 4px;
+}
 
 /* ---------- Dashboard ---------- */
 .dash-wrap { max-width: 720px; margin: 0 auto; width: 100%; }
