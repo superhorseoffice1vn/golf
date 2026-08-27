@@ -185,6 +185,7 @@
     if (!round) { showScreen("home"); return; }
 
     $("#roundCourseChip").textContent = round.course + " · " + new Date(round.date).toLocaleDateString() + " " + new Date(round.date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    $("#greenDistValue").textContent = "— yds";
     $("#holeNum").textContent = round.currentHole;
 
     const entries = DB.entriesForHole(round.id, round.currentHole);
@@ -460,6 +461,7 @@
     $("#unsyncedCount").textContent = DB.unsyncedCount();
     renderSyncError(Sync.lastError());
     renderBag();
+    renderGreenSettings();
   }
 
   function renderBag() {
@@ -503,6 +505,114 @@
     DB.setBag(DB.getDefaultBag());
     renderBag();
     toast("Bag reset to standard set");
+  });
+
+  // ---------------- Green Locations (shared across players, keyed by course) ----------------
+  function currentGreenCourseName() {
+    // Prefer whatever's typed; fall back to the most recent round's course.
+    const typed = $("#greenCourseInput").value.trim();
+    if (typed) return typed;
+    const rounds = DB.getRounds().slice().sort((a, b) => new Date(b.date) - new Date(a.date));
+    return rounds.length ? rounds[0].course : "Mukdahan Golf Club";
+  }
+
+  function renderGreenSettings() {
+    const input = $("#greenCourseInput");
+    if (!input.value.trim()) input.value = currentGreenCourseName();
+    renderGreenHoleList();
+  }
+
+  function renderGreenHoleList() {
+    const course = currentGreenCourseName();
+    const greens = DB.getCourseGreens(course);
+    const list = $("#greenHoleList");
+    list.innerHTML = "";
+    for (let h = 1; h <= 18; h++) {
+      const g = greens[h];
+      const row = document.createElement("div");
+      row.className = "bag-item";
+      const status = g ? `Set (${g.lat.toFixed(5)}, ${g.lon.toFixed(5)})` : "Not set";
+      row.innerHTML = `<span>Hole ${h} — <span style="color:${g ? "var(--fairway)" : "var(--ink-dim)"}">${status}</span></span>`;
+      const btnWrap = document.createElement("span");
+      const captureBtn = document.createElement("button");
+      captureBtn.textContent = "📍";
+      captureBtn.title = "Capture — stand at this green";
+      captureBtn.style.marginRight = g ? "10px" : "0";
+      captureBtn.addEventListener("click", () => captureGreenForHole(course, h));
+      btnWrap.appendChild(captureBtn);
+      if (g) {
+        const clearBtn = document.createElement("button");
+        clearBtn.textContent = "✕";
+        clearBtn.addEventListener("click", () => {
+          DB.clearGreenForHole(course, h);
+          renderGreenHoleList();
+        });
+        btnWrap.appendChild(clearBtn);
+      }
+      row.appendChild(btnWrap);
+      list.appendChild(row);
+    }
+  }
+
+  async function captureGreenForHole(course, hole) {
+    toast("Locking GPS for hole " + hole + "…");
+    try {
+      const loc = await captureLocation({});
+      DB.setGreenForHole(course, hole, { lat: loc.lat, lon: loc.lon });
+      toast("Hole " + hole + " green saved (±" + loc.accuracy + "m)");
+      renderGreenHoleList();
+    } catch (err) {
+      toast("GPS failed: " + (err.message || "check location permission"));
+    }
+  }
+
+  $("#greenCourseInput").addEventListener("change", renderGreenHoleList);
+
+  $("#btnImportGreens").addEventListener("click", () => {
+    const course = currentGreenCourseName();
+    const text = $("#greenPasteInput").value;
+    const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
+    let imported = 0;
+    lines.forEach(line => {
+      const m = line.match(/^(\d{1,2})\s*[:,]\s*(-?\d+\.?\d*)\s*,\s*(-?\d+\.?\d*)\s*$/);
+      if (!m) return;
+      const hole = parseInt(m[1], 10);
+      const lat = parseFloat(m[2]);
+      const lon = parseFloat(m[3]);
+      if (hole < 1 || hole > 18 || isNaN(lat) || isNaN(lon)) return;
+      DB.setGreenForHole(course, hole, { lat, lon });
+      imported++;
+    });
+    if (imported === 0) {
+      toast("No valid lines found — use \"hole: lat, lon\" per line");
+    } else {
+      toast("Imported " + imported + " green location" + (imported === 1 ? "" : "s"));
+      $("#greenPasteInput").value = "";
+      renderGreenHoleList();
+    }
+  });
+
+  $("#btnCheckGreenDist").addEventListener("click", async () => {
+    const round = activeRound(); if (!round) return;
+    const green = DB.getGreenForHole(round.course, round.currentHole);
+    if (!green) {
+      toast("No green saved for hole " + round.currentHole + " — set it up in Settings");
+      return;
+    }
+    const valueEl = $("#greenDistValue");
+    const original = valueEl.textContent;
+    valueEl.textContent = "Locking…";
+    try {
+      const loc = await captureLocation({
+        onSample: (sample, best) => { valueEl.textContent = "±" + best.accuracy + "m…"; }
+      });
+      const meters = Stats.haversine({ lat: loc.lat, lon: loc.lon }, green);
+      const yards = Math.round(Stats.metersToYards(meters));
+      valueEl.textContent = yards + " yds";
+    } catch (err) {
+      valueEl.textContent = original;
+      toast("GPS failed: " + (err.message || "check location permission"));
+    }
   });
 
   $("#btnSaveUrl").addEventListener("click", () => {

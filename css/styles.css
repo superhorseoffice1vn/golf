@@ -315,6 +315,21 @@ input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .bag-item button { background: none; border: none; color: var(--danger); font-size: 18px; }
 .section-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-dim); margin: 22px 0 10px; }
 .section-title:first-child { margin-top: 0; }
+
+.green-dist-card {
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+  padding: 12px 16px; margin-bottom: 16px;
+}
+.green-dist-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-dim); }
+.green-dist-value { font-family: var(--mono); font-size: 24px; font-weight: 700; color: var(--fairway); margin-top: 2px; }
+
+.field-textarea {
+  width: 100%; background: var(--panel); border: 1px solid var(--line); color: var(--ink);
+  border-radius: 12px; padding: 12px 14px; font-family: var(--mono); font-size: 13px;
+  resize: vertical;
+}
+.field-textarea:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .toast {
   position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%);
   background: var(--panel-raised); border: 1px solid var(--line); color: var(--ink);

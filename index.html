@@ -86,6 +86,14 @@
 <section class="screen" id="screen-round">
   <div class="course-chip" id="roundCourseChip">—</div>
 
+  <div class="green-dist-card">
+    <div>
+      <div class="green-dist-label">Distance to Green</div>
+      <div class="green-dist-value" id="greenDistValue">— yds</div>
+    </div>
+    <button class="btn ghost" id="btnCheckGreenDist" style="width:auto; padding:10px 18px; font-size:13px;">📍 Check</button>
+  </div>
+
   <div class="hole-readout">
     <div>
       <div class="label">Hole</div>
@@ -190,6 +198,19 @@
     <button class="btn primary" id="btnAddClub" style="width:auto;">Add</button>
   </div>
   <button class="btn ghost block" id="btnResetBag">Reset to standard bag</button>
+
+  <div class="section-title">Green Locations</div>
+  <div class="stack" style="margin-bottom:14px;">
+    <div class="field-label">Course name (must match round names exactly)</div>
+    <input type="text" id="greenCourseInput" placeholder="e.g. Mukdahan Golf Club" autocomplete="off" />
+  </div>
+  <div class="stack" style="margin-bottom:14px;">
+    <div class="field-label">Paste coordinates — one per line: "hole: lat, lon"</div>
+    <textarea id="greenPasteInput" class="field-textarea" rows="4" placeholder="1: 16.545123, 104.712345&#10;2: 16.546789, 104.713456"></textarea>
+    <button class="btn block" id="btnImportGreens">Import pasted coordinates</button>
+  </div>
+  <div class="field-label">Or capture on-course, standing at each green</div>
+  <div class="bag-list" id="greenHoleList" style="margin-bottom:20px;"></div>
 
   <div class="section-title">Dashboard</div>
   <a href="dashboard.html" class="btn confirm block" style="display:block; text-decoration:none; margin-bottom:20px;">Open Round Dashboard ↗</a>

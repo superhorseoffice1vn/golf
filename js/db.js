@@ -15,12 +15,29 @@ const DB = (() => {
     "4 Iron", "5 Iron", "6 Iron", "7 Iron", "8 Iron", "9 Iron",
     "Pitching Wedge", "53 Wedge", "56 Wedge", "60 Wedge", "Putter"
   ];
+  // Shipped default green locations — materializes into a device's own
+  // storage on first read (same pattern as DEFAULT_BAG), so every install
+  // has these without anyone needing to paste them in manually.
+  const DEFAULT_COURSE_GREENS = {
+    "Mukdahan Golf Club": {
+      1: { lat: 16.561990, lon: 104.697339 },
+      2: { lat: 16.561823, lon: 104.696680 },
+      3: { lat: 16.561524, lon: 104.695570 },
+      4: { lat: 16.562425, lon: 104.694343 },
+      5: { lat: 16.561861, lon: 104.695672 },
+      6: { lat: 16.563420, lon: 104.695891 },
+      7: { lat: 16.562319, lon: 104.696309 },
+      8: { lat: 16.561778, lon: 104.696087 },
+      9: { lat: 16.563615, lon: 104.696504 }
+    }
+  };
 
   // Global (not per-player) keys
   const GKEYS = {
     settings: "fl_settings",
     players: "fl_players",
-    activePlayer: "fl_active_player"
+    activePlayer: "fl_active_player",
+    courseGreens: "fl_course_greens" // {courseName: {hole: {lat, lon}}} — a course fact, not a player fact
   };
   // Per-player key bases — actual key is base + "_" + playerId
   const PKEY_BASES = ["fl_bag", "fl_rounds", "fl_entries", "fl_holes", "fl_active_round"];
@@ -167,6 +184,45 @@ const DB = (() => {
     getHoleSummary(roundId, hole) {
       return this.getHoles().find(h => h.roundId === roundId && h.hole === hole) || null;
     },
+
+    // ---- Green locations — global, shared by all players, keyed by course
+    // name (trimmed, exact match). One-time setup per course; every player
+    // on this device benefits without re-entering it. ----
+    getCourseGreens(courseName) {
+      const key = (courseName || "").trim();
+      const all = read(GKEYS.courseGreens, {});
+      if (all[key]) return all[key];
+      if (DEFAULT_COURSE_GREENS[key]) {
+        all[key] = DEFAULT_COURSE_GREENS[key];
+        write(GKEYS.courseGreens, all);
+        return all[key];
+      }
+      return {};
+    },
+    setGreenForHole(courseName, hole, latlon) {
+      const key = (courseName || "").trim();
+      if (!key) return;
+      const all = read(GKEYS.courseGreens, {});
+      if (!all[key]) all[key] = {};
+      all[key][hole] = latlon;
+      write(GKEYS.courseGreens, all);
+    },
+    getGreenForHole(courseName, hole) {
+      const greens = this.getCourseGreens(courseName);
+      return greens[hole] || null;
+    },
+    clearGreenForHole(courseName, hole) {
+      const key = (courseName || "").trim();
+      const all = read(GKEYS.courseGreens, {});
+      if (all[key]) { delete all[key][hole]; write(GKEYS.courseGreens, all); }
+    },
+    clearCourseGreens(courseName) {
+      const key = (courseName || "").trim();
+      const all = read(GKEYS.courseGreens, {});
+      delete all[key];
+      write(GKEYS.courseGreens, all);
+    },
+    getCoursesWithGreens() { return Object.keys(read(GKEYS.courseGreens, {})); },
 
     // ---- Unsynced items across entries + holes — per active player ----
     unsyncedEntries() { return this.getEntries().filter(e => !e.synced); },
