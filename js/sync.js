@@ -67,7 +67,8 @@ const Sync = (() => {
         hole: h.hole,
         type: "Putts",
         putts: h.putts,
-        strokes: h.strokes != null ? h.strokes : ""
+        strokes: h.strokes != null ? h.strokes : "",
+        par: h.par != null ? h.par : ""
       });
     });
 

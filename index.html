@@ -76,9 +76,12 @@
   </div>
 
   <div class="stack">
-    <div class="field-label">Course name</div>
-    <input type="text" id="courseInput" placeholder="e.g. Riverdale Golf Club" autocomplete="off" />
-    <button class="btn confirm block" id="btnStartRound">Start round</button>
+    <div class="field-label">Course</div>
+    <div class="round-chip-row" id="startCourseChips"></div>
+    <div id="customCourseBlock" style="display:none;">
+      <input type="text" id="courseInput" placeholder="Course name" autocomplete="off" style="margin-top:10px;" />
+    </div>
+    <button class="btn confirm block" id="btnStartRound" style="margin-top:14px;">Start round</button>
   </div>
 </section>
 
@@ -98,6 +101,7 @@
     <div>
       <div class="label">Hole</div>
       <div class="num" id="holeNum">1</div>
+      <div class="par-badge" id="parBadge" style="display:none;"></div>
     </div>
     <div class="stepper">
       <button id="holeMinus">−</button>
@@ -121,7 +125,13 @@
   <button class="link-btn" id="btnSkipTeeShot" style="display:none; margin:0 0 18px;">Forgot to log your tee shot? Skip →</button>
 
   <div class="putts-block" id="puttsBlock" style="display:none;">
-    <div class="field-label" style="text-align:center;">Strokes this hole</div>
+    <div class="field-label" style="text-align:center;" id="parStepperLabel">Par this hole</div>
+    <div class="putts-control" id="parStepperControl">
+      <button id="parMinus">−</button>
+      <div class="count" id="parCount">4</div>
+      <button id="parPlus">+</button>
+    </div>
+    <div class="field-label" style="text-align:center; margin-top:14px;">Strokes this hole</div>
     <div class="putts-control">
       <button id="strokesMinus">−</button>
       <div class="count" id="strokesCount">0</div>
@@ -157,6 +167,7 @@
     <div class="kpi"><div class="num" id="kpiStrokes">0</div><div class="lbl">Total strokes</div></div>
     <div class="kpi"><div class="num" id="kpiPutts">0</div><div class="lbl">Total putts</div></div>
     <div class="kpi"><div class="num" id="kpiPuttsHole">0.0</div><div class="lbl">Putts / hole</div></div>
+    <div class="kpi"><div class="num" id="kpiVsPar">—</div><div class="lbl">Score vs Par</div></div>
   </div>
 
   <div class="stat-card">
@@ -199,18 +210,25 @@
   </div>
   <button class="btn ghost block" id="btnResetBag">Reset to standard bag</button>
 
-  <div class="section-title">Green Locations</div>
+  <div class="section-title">Built-in courses</div>
+  <div id="builtInCoursesList"></div>
+
+  <div class="section-title">Custom course green locations</div>
+  <div class="capture-hint" style="margin-bottom:12px;">For courses not in the built-in list. Built-in courses (above) are locked and can't be edited.</div>
   <div class="stack" style="margin-bottom:14px;">
-    <div class="field-label">Course name (must match round names exactly)</div>
-    <input type="text" id="greenCourseInput" placeholder="e.g. Mukdahan Golf Club" autocomplete="off" />
+    <div class="field-label">Course name</div>
+    <input type="text" id="greenCourseInput" placeholder="e.g. Some Other Golf Club" autocomplete="off" />
   </div>
-  <div class="stack" style="margin-bottom:14px;">
-    <div class="field-label">Paste coordinates — one per line: "hole: lat, lon"</div>
-    <textarea id="greenPasteInput" class="field-textarea" rows="4" placeholder="1: 16.545123, 104.712345&#10;2: 16.546789, 104.713456"></textarea>
-    <button class="btn block" id="btnImportGreens">Import pasted coordinates</button>
+  <div id="customGreenEditor">
+    <div class="stack" style="margin-bottom:14px;">
+      <div class="field-label">Paste coordinates — one per line: "hole: lat, lon"</div>
+      <textarea id="greenPasteInput" class="field-textarea" rows="4" placeholder="1: 16.545123, 104.712345&#10;2: 16.546789, 104.713456"></textarea>
+      <button class="btn block" id="btnImportGreens">Import pasted coordinates</button>
+    </div>
+    <div class="field-label">Or capture on-course, standing at each green</div>
+    <div class="bag-list" id="greenHoleList" style="margin-bottom:20px;"></div>
   </div>
-  <div class="field-label">Or capture on-course, standing at each green</div>
-  <div class="bag-list" id="greenHoleList" style="margin-bottom:20px;"></div>
+  <div class="empty" id="builtInLockedNotice" style="display:none; margin-bottom:20px;">This is a built-in course — its data is locked. See the reference table above.</div>
 
   <div class="section-title">Dashboard</div>
   <a href="dashboard.html" class="btn confirm block" style="display:block; text-decoration:none; margin-bottom:20px;">Open Round Dashboard ↗</a>

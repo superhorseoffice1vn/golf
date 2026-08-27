@@ -96,6 +96,18 @@ const Stats = (() => {
       const shotsThisHole = entries.filter(e => e.hole === h.hole && e.type === "Shot").length;
       return s + shotsThisHole + (h.putts || 0);
     }, 0);
+    // vs Par — only counts holes where Par is actually known, so it's never
+    // skewed by holes missing that data (e.g. logged before Par existed).
+    let totalPar = 0, strokesWithPar = 0, holesWithPar = 0;
+    holeSummaries.forEach(h => {
+      if (h.par == null) return;
+      const shotsThisHole = entries.filter(e => e.hole === h.hole && e.type === "Shot").length;
+      const strokesThisHole = h.strokes != null ? h.strokes : shotsThisHole + (h.putts || 0);
+      totalPar += h.par;
+      strokesWithPar += strokesThisHole;
+      holesWithPar++;
+    });
+    const scoreVsPar = holesWithPar > 0 ? strokesWithPar - totalPar : null;
     const clubCounts = {};
     entries.forEach(e => {
       if (e.type === "Shot" && e.club) clubCounts[e.club] = (clubCounts[e.club] || 0) + 1;
@@ -106,6 +118,7 @@ const Stats = (() => {
       totalShots,
       totalPutts,
       puttsPerHole: holeSummaries.length ? totalPutts / holeSummaries.length : 0,
+      totalPar, holesWithPar, scoreVsPar,
       clubCounts
     };
   }
@@ -113,16 +126,20 @@ const Stats = (() => {
   function allTimeSummary() {
     const rounds = DB.getRounds();
     let strokes = 0, putts = 0, shots = 0, holes = 0;
+    let totalPar = 0, strokesWithPar = 0, holesWithPar = 0;
     rounds.forEach(r => {
       const s = roundSummary(r.id);
       strokes += s.totalStrokes; putts += s.totalPutts; shots += s.totalShots; holes += s.holesPlayed;
+      totalPar += s.totalPar; holesWithPar += s.holesWithPar;
+      if (s.scoreVsPar != null) strokesWithPar += s.totalPar + s.scoreVsPar; // = strokes on par-known holes
     });
     return {
       rounds: rounds.length,
       totalStrokes: strokes,
       totalPutts: putts,
       totalShots: shots,
-      puttsPerHole: holes ? putts / holes : 0
+      puttsPerHole: holes ? putts / holes : 0,
+      scoreVsPar: holesWithPar > 0 ? strokesWithPar - totalPar : null
     };
   }
 

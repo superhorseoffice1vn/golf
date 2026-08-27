@@ -15,20 +15,24 @@ const DB = (() => {
     "4 Iron", "5 Iron", "6 Iron", "7 Iron", "8 Iron", "9 Iron",
     "Pitching Wedge", "53 Wedge", "56 Wedge", "60 Wedge", "Putter"
   ];
-  // Shipped default green locations — materializes into a device's own
-  // storage on first read (same pattern as DEFAULT_BAG), so every install
-  // has these without anyone needing to paste them in manually.
-  const DEFAULT_COURSE_GREENS = {
+  // Built-in course database — read-only, shipped in the app itself.
+  // These are facts about real courses, never editable by the user; I add
+  // new courses here only when asked. "Other" (unlisted) courses use the
+  // separate per-device custom-green store further down instead.
+  const COURSES = {
     "Mukdahan Golf Club": {
-      1: { lat: 16.561990, lon: 104.697339 },
-      2: { lat: 16.561823, lon: 104.696680 },
-      3: { lat: 16.561524, lon: 104.695570 },
-      4: { lat: 16.562425, lon: 104.694343 },
-      5: { lat: 16.561861, lon: 104.695672 },
-      6: { lat: 16.563420, lon: 104.695891 },
-      7: { lat: 16.562319, lon: 104.696309 },
-      8: { lat: 16.561778, lon: 104.696087 },
-      9: { lat: 16.563615, lon: 104.696504 }
+      holes: 9,
+      greens: {
+        1: { lat: 16.561990, lon: 104.697339, par: 3 },
+        2: { lat: 16.561823, lon: 104.696680, par: 3 },
+        3: { lat: 16.561524, lon: 104.695570, par: 3 },
+        4: { lat: 16.562425, lon: 104.694343, par: 4 },
+        5: { lat: 16.561861, lon: 104.695672, par: 3 },
+        6: { lat: 16.563420, lon: 104.695891, par: 4 },
+        7: { lat: 16.562319, lon: 104.696309, par: 4 },
+        8: { lat: 16.561778, lon: 104.696087, par: 3 },
+        9: { lat: 16.563615, lon: 104.696504, par: 4 }
+      }
     }
   };
 
@@ -185,39 +189,50 @@ const DB = (() => {
       return this.getHoles().find(h => h.roundId === roundId && h.hole === hole) || null;
     },
 
-    // ---- Green locations — global, shared by all players, keyed by course
-    // name (trimmed, exact match). One-time setup per course; every player
-    // on this device benefits without re-entering it. ----
+    // ---- Built-in courses — read-only, shipped in the app ----
+    getBuiltInCourses() { return Object.keys(COURSES); },
+    isBuiltInCourse(courseName) { return !!COURSES[(courseName || "").trim()]; },
+    getHoleCountForCourse(courseName) {
+      const c = COURSES[(courseName || "").trim()];
+      return c ? c.holes : 18; // unknown/custom courses default to 18
+    },
+    getBuiltInHoleData(courseName, hole) {
+      const c = COURSES[(courseName || "").trim()];
+      return c ? (c.greens[hole] || null) : null; // {lat, lon, par}
+    },
+
+    // ---- Green locations for CUSTOM ("Other") courses only — global,
+    // shared by all players, keyed by course name (trimmed, exact match).
+    // Built-in courses never touch this store; they're read from COURSES. ----
     getCourseGreens(courseName) {
       const key = (courseName || "").trim();
+      if (this.isBuiltInCourse(key)) return {}; // built-ins aren't stored here
       const all = read(GKEYS.courseGreens, {});
-      if (all[key]) return all[key];
-      if (DEFAULT_COURSE_GREENS[key]) {
-        all[key] = DEFAULT_COURSE_GREENS[key];
-        write(GKEYS.courseGreens, all);
-        return all[key];
-      }
-      return {};
+      return all[key] || {};
     },
     setGreenForHole(courseName, hole, latlon) {
       const key = (courseName || "").trim();
-      if (!key) return;
+      if (!key || this.isBuiltInCourse(key)) return; // built-ins are locked
       const all = read(GKEYS.courseGreens, {});
       if (!all[key]) all[key] = {};
       all[key][hole] = latlon;
       write(GKEYS.courseGreens, all);
     },
+    // Works for either kind of course — built-in lookup first, custom store fallback.
     getGreenForHole(courseName, hole) {
-      const greens = this.getCourseGreens(courseName);
-      return greens[hole] || null;
+      const builtIn = this.getBuiltInHoleData(courseName, hole);
+      if (builtIn) return { lat: builtIn.lat, lon: builtIn.lon };
+      return this.getCourseGreens(courseName)[hole] || null;
     },
     clearGreenForHole(courseName, hole) {
       const key = (courseName || "").trim();
+      if (this.isBuiltInCourse(key)) return; // built-ins are locked
       const all = read(GKEYS.courseGreens, {});
       if (all[key]) { delete all[key][hole]; write(GKEYS.courseGreens, all); }
     },
     clearCourseGreens(courseName) {
       const key = (courseName || "").trim();
+      if (this.isBuiltInCourse(key)) return; // built-ins are locked
       const all = read(GKEYS.courseGreens, {});
       delete all[key];
       write(GKEYS.courseGreens, all);

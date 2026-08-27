@@ -140,6 +140,8 @@
   }
 
   // ---------------- Home ----------------
+  let selectedStartCourse = null; // built-in course name, or "Other"
+
   function renderHome() {
     const playerName = DB.getActivePlayerName();
     $("#homePlayerLine").textContent = playerName ? "Playing as " + playerName : "";
@@ -152,13 +154,35 @@
     } else {
       block.style.display = "none";
     }
-    $("#courseInput").value = "Mukdahan Golf Club";
+    if (!selectedStartCourse) {
+      const builtIns = DB.getBuiltInCourses();
+      selectedStartCourse = builtIns.length ? builtIns[0] : "Other";
+    }
+    renderStartCourseChips();
+  }
+
+  function renderStartCourseChips() {
+    const row = $("#startCourseChips");
+    row.innerHTML = "";
+    const options = [...DB.getBuiltInCourses(), "Other"];
+    options.forEach(name => {
+      const chip = document.createElement("button");
+      chip.className = "round-chip" + (name === selectedStartCourse ? " active" : "");
+      chip.textContent = name;
+      chip.addEventListener("click", () => {
+        selectedStartCourse = name;
+        renderStartCourseChips();
+        $("#customCourseBlock").style.display = name === "Other" ? "" : "none";
+      });
+      row.appendChild(chip);
+    });
+    $("#customCourseBlock").style.display = selectedStartCourse === "Other" ? "" : "none";
   }
 
   $("#btnContinueRound").addEventListener("click", () => showScreen("round"));
 
   $("#btnStartRound").addEventListener("click", () => {
-    const course = $("#courseInput").value.trim();
+    const course = selectedStartCourse === "Other" ? $("#courseInput").value.trim() : selectedStartCourse;
     if (!course) { toast("Enter a course name"); return; }
     if (DB.getBag().length === 0) { toast("Add clubs in Settings first"); showScreen("settings"); return; }
     const round = {
@@ -187,6 +211,16 @@
     $("#roundCourseChip").textContent = round.course + " · " + new Date(round.date).toLocaleDateString() + " " + new Date(round.date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     $("#greenDistValue").textContent = "— yds";
     $("#holeNum").textContent = round.currentHole;
+
+    const isBuiltIn = DB.isBuiltInCourse(round.course);
+    const builtInHole = isBuiltIn ? DB.getBuiltInHoleData(round.course, round.currentHole) : null;
+    const parBadge = $("#parBadge");
+    if (builtInHole) {
+      parBadge.style.display = "";
+      parBadge.textContent = "Par " + builtInHole.par;
+    } else {
+      parBadge.style.display = "none";
+    }
 
     const entries = DB.entriesForHole(round.id, round.currentHole);
     const log = $("#shotLog");
@@ -223,6 +257,20 @@
     if (hasGreen) {
       puttsBlock.style.display = "";
       const existing = DB.getHoleSummary(round.id, round.currentHole);
+
+      // Par: locked badge for built-in courses (handled above); editable
+      // stepper only for custom courses, since there's no fixed source for it.
+      const parStepperControl = $("#parStepperControl");
+      const parStepperLabel = $("#parStepperLabel");
+      if (isBuiltIn) {
+        parStepperControl.style.display = "none";
+        parStepperLabel.style.display = "none";
+      } else {
+        parStepperControl.style.display = "";
+        parStepperLabel.style.display = "";
+        $("#parCount").textContent = existing && existing.par != null ? existing.par : 4;
+      }
+
       $("#puttsCount").textContent = existing ? existing.putts : 0;
       // Strokes defaults to shots+putts, but only when not already explicitly
       // saved for this hole — once set, it's independent of further edits.
@@ -243,7 +291,8 @@
   });
   $("#holePlus").addEventListener("click", () => {
     const round = activeRound(); if (!round) return;
-    round.currentHole = Math.min(18, round.currentHole + 1);
+    const maxHole = DB.getHoleCountForCourse(round.course);
+    round.currentHole = Math.min(maxHole, round.currentHole + 1);
     DB.saveRound(round); renderRound();
   });
 
@@ -298,6 +347,12 @@
     }
   });
 
+  // Par stepper — only shown/used for custom ("Other") courses, since
+  // built-in courses have a fixed Par pulled from the course database.
+  function getParInput() { return parseInt($("#parCount").textContent, 10) || 4; }
+  $("#parMinus").addEventListener("click", () => { $("#parCount").textContent = Math.max(3, getParInput() - 1); });
+  $("#parPlus").addEventListener("click", () => { $("#parCount").textContent = Math.min(6, getParInput() + 1); });
+
   // Strokes stepper — defaults to shots+putts but is independently editable,
   // so penalty strokes, miscounts, or a missed tee-shot log can be corrected
   // without touching the underlying GPS shot data used for club distances.
@@ -314,15 +369,20 @@
     const round = activeRound(); if (!round) return;
     const putts = getPutts();
     const strokes = getStrokes();
+    // Resolve Par: built-in courses always use their fixed value regardless
+    // of what the (hidden) stepper shows; custom courses use the manual entry.
+    const builtInHole = DB.getBuiltInHoleData(round.course, round.currentHole);
+    const par = builtInHole ? builtInHole.par : getParInput();
     const existing = DB.getHoleSummary(round.id, round.currentHole);
     DB.saveHoleSummary({
       id: existing ? existing.id : DB.uid(),
-      roundId: round.id, hole: round.currentHole, putts, strokes,
+      roundId: round.id, hole: round.currentHole, putts, strokes, par,
       timestamp: Date.now(), synced: false
     });
     Sync.attempt();
-    if (round.currentHole >= 18) {
-      toast("Hole 18 logged — tap End Round when ready");
+    const maxHole = DB.getHoleCountForCourse(round.course);
+    if (round.currentHole >= maxHole) {
+      toast("Hole " + maxHole + " logged — tap End Round when ready");
     } else {
       round.currentHole += 1;
       DB.saveRound(round);
@@ -402,12 +462,19 @@
   });
 
   // ---------------- Stats ----------------
+  function formatVsPar(n) {
+    if (n == null) return "—";
+    if (n === 0) return "E";
+    return n > 0 ? "+" + n : String(n);
+  }
+
   function renderStats() {
     const summary = Stats.allTimeSummary();
     $("#kpiRounds").textContent = summary.rounds;
     $("#kpiStrokes").textContent = summary.totalStrokes;
     $("#kpiPutts").textContent = summary.totalPutts;
     $("#kpiPuttsHole").textContent = summary.puttsPerHole.toFixed(1);
+    $("#kpiVsPar").textContent = formatVsPar(summary.scoreVsPar);
 
     const dist = Stats.clubDistances();
     const list = $("#clubStatsList");
@@ -445,9 +512,10 @@
     } else {
       roundsList.innerHTML = rounds.map(r => {
         const s = Stats.roundSummary(r.id);
+        const vsPar = s.scoreVsPar != null ? " (" + formatVsPar(s.scoreVsPar) + ")" : "";
         return `<div class="club-stat-row">
           <span class="name">${r.course}<br><span class="range">${new Date(r.date).toLocaleDateString()} ${new Date(r.date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></span>
-          <span><span class="avg">${s.totalStrokes}</span><span class="range">${s.totalPutts} putts</span></span>
+          <span><span class="avg">${s.totalStrokes}${vsPar}</span><span class="range">${s.totalPutts} putts</span></span>
         </div>`;
       }).join("");
     }
@@ -509,25 +577,61 @@
 
   // ---------------- Green Locations (shared across players, keyed by course) ----------------
   function currentGreenCourseName() {
-    // Prefer whatever's typed; fall back to the most recent round's course.
+    // Prefer whatever's typed; fall back to the most recent CUSTOM round's
+    // course (built-ins have nothing to edit here, so don't default to one).
     const typed = $("#greenCourseInput").value.trim();
     if (typed) return typed;
     const rounds = DB.getRounds().slice().sort((a, b) => new Date(b.date) - new Date(a.date));
-    return rounds.length ? rounds[0].course : "Mukdahan Golf Club";
+    const lastCustom = rounds.find(r => !DB.isBuiltInCourse(r.course));
+    return lastCustom ? lastCustom.course : "";
   }
 
   function renderGreenSettings() {
     const input = $("#greenCourseInput");
     if (!input.value.trim()) input.value = currentGreenCourseName();
+    renderBuiltInCoursesList();
     renderGreenHoleList();
+  }
+
+  function renderBuiltInCoursesList() {
+    const container = $("#builtInCoursesList");
+    const courses = DB.getBuiltInCourses();
+    if (courses.length === 0) {
+      container.innerHTML = '<div class="empty">None yet.</div>';
+      return;
+    }
+    container.innerHTML = courses.map(name => {
+      const holeCount = DB.getHoleCountForCourse(name);
+      let rows = "";
+      for (let h = 1; h <= holeCount; h++) {
+        const d = DB.getBuiltInHoleData(name, h);
+        rows += `<tr><td>${h}</td><td>${d ? d.par : "—"}</td><td>${d ? d.lat.toFixed(5) + ", " + d.lon.toFixed(5) : "—"}</td></tr>`;
+      }
+      return `<div class="stat-card">
+        <div class="title">${name} — 🔒 built-in (locked)</div>
+        <table class="hole-table"><tr><th>Hole</th><th>Par</th><th>Green Coordinates</th></tr>${rows}</table>
+      </div>`;
+    }).join("");
   }
 
   function renderGreenHoleList() {
     const course = currentGreenCourseName();
+    const editor = $("#customGreenEditor");
+    const lockedNotice = $("#builtInLockedNotice");
+
+    if (course && DB.isBuiltInCourse(course)) {
+      editor.style.display = "none";
+      lockedNotice.style.display = "";
+      return;
+    }
+    editor.style.display = "";
+    lockedNotice.style.display = "none";
+
     const greens = DB.getCourseGreens(course);
     const list = $("#greenHoleList");
     list.innerHTML = "";
-    for (let h = 1; h <= 18; h++) {
+    const holeCount = DB.getHoleCountForCourse(course); // 18 default for unlisted/custom
+    for (let h = 1; h <= holeCount; h++) {
       const g = greens[h];
       const row = document.createElement("div");
       row.className = "bag-item";
@@ -570,6 +674,10 @@
 
   $("#btnImportGreens").addEventListener("click", () => {
     const course = currentGreenCourseName();
+    if (DB.isBuiltInCourse(course)) {
+      toast(course + " is built-in and locked — can't import over it");
+      return;
+    }
     const text = $("#greenPasteInput").value;
     const lines = text.split("\n").map(l => l.trim()).filter(Boolean);
     let imported = 0;

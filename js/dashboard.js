@@ -119,6 +119,7 @@
       accuracy: r["Accuracy (m)"] !== "" && r["Accuracy (m)"] != null ? Number(r["Accuracy (m)"]) : null,
       putts: r["Putts"] !== "" && r["Putts"] != null ? Number(r["Putts"]) : null,
       strokes: r["Strokes"] !== "" && r["Strokes"] != null ? Number(r["Strokes"]) : null,
+      par: r["Par"] !== "" && r["Par"] != null ? Number(r["Par"]) : null,
       entryId: r["Entry ID"] || "",
       roundId: r["Round ID"] || "",
       player: r["Player"] || "Unknown"
@@ -169,7 +170,8 @@
       // Prefer the explicit strokes override (penalty strokes, a missed
       // tee-shot log, etc.) when it was set; fall back to shots+putts.
       const strokes = (puttsRow && puttsRow.strokes != null) ? puttsRow.strokes : shots + putts;
-      perHole[h] = { shots, putts, strokes };
+      const par = puttsRow && puttsRow.par != null ? puttsRow.par : null;
+      perHole[h] = { shots, putts, strokes, par };
 
       const posRows = holeRows.filter(r => (r.type === "Shot" || r.type === "Green") && r.lat != null && r.lon != null);
       for (let i = 0; i < posRows.length - 1; i++) {
@@ -185,6 +187,11 @@
 
     const totalStrokes = Object.values(perHole).reduce((s, h) => s + h.strokes, 0);
     const totalPutts = Object.values(perHole).reduce((s, h) => s + h.putts, 0);
+    // vs Par — only counts holes where Par is actually known.
+    const parHoles = Object.values(perHole).filter(h => h.par != null);
+    const totalPar = parHoles.reduce((s, h) => s + h.par, 0);
+    const strokesWithPar = parHoles.reduce((s, h) => s + h.strokes, 0);
+    const scoreVsPar = parHoles.length > 0 ? strokesWithPar - totalPar : null;
 
     const clubDistances = {};
     Object.keys(clubRaw).forEach(c => {
@@ -193,7 +200,7 @@
       clubDistances[c] = { raw: yards, full: summarize(full), short: summarize(short) };
     });
 
-    return { holesSet, perHole, totalStrokes, totalPutts, holesPlayed: holesSet.length, clubDistances };
+    return { holesSet, perHole, totalStrokes, totalPutts, holesPlayed: holesSet.length, totalPar, scoreVsPar, clubDistances };
   }
 
   // ---------------- Shot map ----------------
@@ -377,15 +384,21 @@
     }).join("");
   }
 
+  function formatVsPar(n) {
+    if (n == null) return "—";
+    if (n === 0) return "E";
+    return n > 0 ? "+" + n : String(n);
+  }
+
   function renderHoleTable(stats) {
     const rows = stats.holesSet.map(h => {
       const ph = stats.perHole[h];
-      return `<tr><td>${h}</td><td>${ph.strokes}</td><td>${ph.putts}</td></tr>`;
+      return `<tr><td>${h}</td><td>${ph.par != null ? ph.par : "—"}</td><td>${ph.strokes}</td><td>${ph.putts}</td></tr>`;
     }).join("");
     $("#rdHoleTable").innerHTML = `
-      <tr><th>Hole</th><th>Strokes</th><th>Putts</th></tr>
-      ${rows || '<tr><td colspan="3" class="empty">No holes logged.</td></tr>'}
-      ${stats.holesSet.length ? `<tr class="tot"><td>Total</td><td>${stats.totalStrokes}</td><td>${stats.totalPutts}</td></tr>` : ""}
+      <tr><th>Hole</th><th>Par</th><th>Strokes</th><th>Putts</th></tr>
+      ${rows || '<tr><td colspan="4" class="empty">No holes logged.</td></tr>'}
+      ${stats.holesSet.length ? `<tr class="tot"><td>Total</td><td>${stats.totalPar || "—"}</td><td>${stats.totalStrokes}</td><td>${stats.totalPutts}</td></tr>` : ""}
     `;
   }
 
@@ -402,7 +415,7 @@
     $("#rdStrokes").textContent = stats.totalStrokes;
     $("#rdPutts").textContent = stats.totalPutts;
     $("#rdHoles").textContent = stats.holesPlayed;
-    $("#rdPuttsHole").textContent = stats.holesPlayed ? (stats.totalPutts / stats.holesPlayed).toFixed(1) : "0.0";
+    $("#rdVsPar").textContent = formatVsPar(stats.scoreVsPar);
 
     renderHoleTable(stats);
     renderClubDist("#rdClubDist", stats.clubDistances);
@@ -416,12 +429,13 @@
     const roundStats = rounds.map(rd => ({ rd, stats: computeRoundStats(rd.rows) }));
     const totalStrokes = roundStats.reduce((s, x) => s + x.stats.totalStrokes, 0);
     const totalPutts = roundStats.reduce((s, x) => s + x.stats.totalPutts, 0);
-    const totalHoles = roundStats.reduce((s, x) => s + x.stats.holesPlayed, 0);
+    const parRounds = roundStats.filter(x => x.stats.scoreVsPar != null);
+    const allVsPar = parRounds.length ? parRounds.reduce((s, x) => s + x.stats.scoreVsPar, 0) : null;
 
     $("#atRounds").textContent = rounds.length;
     $("#atStrokes").textContent = totalStrokes;
     $("#atPutts").textContent = totalPutts;
-    $("#atPuttsHole").textContent = totalHoles ? (totalPutts / totalHoles).toFixed(1) : "0.0";
+    $("#atVsPar").textContent = formatVsPar(allVsPar);
 
     // Trend: last 10 rounds, oldest-to-newest left to right
     const last10 = roundStats.slice(0, 10).slice().reverse();

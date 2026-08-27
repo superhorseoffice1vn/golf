@@ -141,6 +141,11 @@ input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
   margin-bottom: 18px;
 }
 .hole-readout .num { font-family: var(--mono); font-size: 44px; font-weight: 700; line-height: 1; }
+.par-badge {
+  display: inline-block; margin-top: 4px; font-family: var(--mono); font-size: 12px;
+  font-weight: 700; color: var(--ink-dim); background: var(--panel-raised);
+  border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px;
+}
 .hole-readout .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-dim); }
 .stepper { display: flex; align-items: center; gap: 14px; }
 .stepper button {
