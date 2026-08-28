@@ -517,6 +517,58 @@
     }).join("");
   }
 
+  let selectedTrendClub = null;
+
+  function renderClubTrend(roundStats) {
+    // Which clubs have full-swing data in at least one round, oldest-to-newest.
+    const chronological = roundStats.slice().reverse();
+    const clubsWithData = {}; // club -> count of rounds with data
+    chronological.forEach(x => {
+      Object.keys(x.stats.clubDistances).forEach(c => {
+        if (x.stats.clubDistances[c].full) clubsWithData[c] = (clubsWithData[c] || 0) + 1;
+      });
+    });
+    const clubs = Object.keys(clubsWithData).sort((a, b) => clubsWithData[b] - clubsWithData[a]);
+
+    const chipRow = $("#clubTrendChips");
+    if (clubs.length === 0) {
+      chipRow.innerHTML = "";
+      $("#clubTrendChart").innerHTML = '<div class="empty" style="padding:20px 0;">No club distance data yet.</div>';
+      $("#clubTrendLabels").innerHTML = "";
+      return;
+    }
+    if (!selectedTrendClub || !clubs.includes(selectedTrendClub)) selectedTrendClub = clubs[0];
+
+    chipRow.innerHTML = "";
+    clubs.forEach(c => {
+      const chip = document.createElement("button");
+      chip.className = "round-chip" + (c === selectedTrendClub ? " active" : "");
+      chip.textContent = c;
+      chip.addEventListener("click", () => { selectedTrendClub = c; renderClubTrend(roundStats); });
+      chipRow.appendChild(chip);
+    });
+
+    const points = chronological
+      .map(x => ({ date: x.rd.date, avg: x.stats.clubDistances[selectedTrendClub]?.full?.avg }))
+      .filter(p => p.avg != null)
+      .slice(-10); // last 10 rounds with data for this club
+
+    const chart = $("#clubTrendChart"); chart.innerHTML = "";
+    const labels = $("#clubTrendLabels"); labels.innerHTML = "";
+    const maxAvg = Math.max(...points.map(p => p.avg), 1);
+    const cat = clubCategory(selectedTrendClub);
+    points.forEach(p => {
+      const pct = Math.max(8, Math.round((p.avg / maxAvg) * 100));
+      const bar = document.createElement("div");
+      bar.className = "trend-bar";
+      bar.innerHTML = `<div class="fill" style="height:${pct}%; background:var(--cat-${cat})" title="${Math.round(p.avg)}y"></div>`;
+      chart.appendChild(bar);
+      const lbl = document.createElement("span");
+      lbl.textContent = p.date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      labels.appendChild(lbl);
+    });
+  }
+
   function renderAllTime() {
     const roundStats = rounds.map(rd => ({ rd, stats: computeRoundStats(rd.rows) }));
     const totalStrokes = roundStats.reduce((s, x) => s + x.stats.totalStrokes, 0);
@@ -548,6 +600,32 @@
       lbl.textContent = x.rd.date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
       labels.appendChild(lbl);
     });
+
+    // vs-Par trend — centered zero line, bars extend up (over par, red) or
+    // down (under par, green). Only rounds with known Par data are shown.
+    const vsParRounds = last10.filter(x => x.stats.scoreVsPar != null);
+    const vpChart = $("#vsParTrendChart");
+    vpChart.innerHTML = '<div class="trend-zero-line"></div>';
+    const vpLabels = $("#vsParTrendLabels"); vpLabels.innerHTML = "";
+    if (vsParRounds.length === 0) {
+      vpChart.innerHTML += '<div class="empty" style="padding:20px 0;">No Par data yet.</div>';
+    } else {
+      const maxAbs = Math.max(...vsParRounds.map(x => Math.abs(x.stats.scoreVsPar)), 1);
+      vsParRounds.forEach(x => {
+        const v = x.stats.scoreVsPar;
+        const pct = Math.max(6, Math.round((Math.abs(v) / maxAbs) * 48)); // half-height max (centered)
+        const bar = document.createElement("div");
+        bar.className = "trend-bar-centered";
+        const cls = v === 0 ? "even" : (v > 0 ? "over" : "under");
+        bar.innerHTML = `<div class="fill ${cls}" style="height:${pct}%" title="${formatVsPar(v)}"></div>`;
+        vpChart.appendChild(bar);
+        const lbl = document.createElement("span");
+        lbl.textContent = x.rd.date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+        vpLabels.appendChild(lbl);
+      });
+    }
+
+    renderClubTrend(roundStats);
 
     // Aggregate club distances across ALL rounds (concat raw yards, then
     // re-cluster on the combined set — more data can reveal a full/short

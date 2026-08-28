@@ -56,20 +56,21 @@ function doPost(e) {
     const rows = body.rows || [];
     const sheet = getSheet_();
 
-    // Skip any Entry ID already present, so a retried sync never double-writes.
-    // (Guard the 0-row case — a brand-new sheet with only the header row would
-    // otherwise throw, since Apps Script requires numRows >= 1 on getRange.)
+    // Map existing Entry ID -> sheet row number, so a re-synced correction
+    // updates that row in place instead of being silently skipped. Guard the
+    // 0-row case — a brand-new sheet with only headers would otherwise throw,
+    // since Apps Script requires numRows >= 1 on getRange.
     const lastRow = sheet.getLastRow();
-    const existingIds = new Set(
-      lastRow > 1
-        ? sheet.getRange(2, ENTRY_ID_COL, lastRow - 1, 1).getValues().flat().filter(String)
-        : []
-    );
+    const idToRow = {};
+    if (lastRow > 1) {
+      const ids = sheet.getRange(2, ENTRY_ID_COL, lastRow - 1, 1).getValues();
+      ids.forEach((row, i) => { if (row[0]) idToRow[row[0]] = i + 2; }); // +2: 1-based rows + header row
+    }
 
-    const toWrite = [];
+    const toAppend = [];
+    let updated = 0;
     rows.forEach(r => {
-      if (existingIds.has(r.id)) return;
-      toWrite.push([
+      const rowValues = [
         r.timestamp ? new Date(r.timestamp) : new Date(),
         r.course || "",
         r.hole != null ? r.hole : "",
@@ -84,14 +85,20 @@ function doPost(e) {
         r.player || "",
         r.strokes != null && r.strokes !== "" ? r.strokes : "",
         r.par != null && r.par !== "" ? r.par : ""
-      ]);
+      ];
+      if (idToRow[r.id]) {
+        sheet.getRange(idToRow[r.id], 1, 1, HEADERS.length).setValues([rowValues]);
+        updated++;
+      } else {
+        toAppend.push(rowValues);
+      }
     });
 
-    if (toWrite.length > 0) {
-      sheet.getRange(sheet.getLastRow() + 1, 1, toWrite.length, HEADERS.length).setValues(toWrite);
+    if (toAppend.length > 0) {
+      sheet.getRange(sheet.getLastRow() + 1, 1, toAppend.length, HEADERS.length).setValues(toAppend);
     }
 
-    return jsonOut_({ status: "ok", written: toWrite.length });
+    return jsonOut_({ status: "ok", written: toAppend.length, updated: updated });
   } catch (err) {
     return jsonOut_({ status: "error", message: err.message });
   }

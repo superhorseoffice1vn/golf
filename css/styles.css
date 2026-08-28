@@ -328,6 +328,7 @@ input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 }
 .green-dist-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--ink-dim); }
 .green-dist-value { font-family: var(--mono); font-size: 24px; font-weight: 700; color: var(--fairway); margin-top: 2px; }
+.green-dist-suggestion { font-size: 12px; color: var(--ink-dim); margin-top: 4px; }
 
 .field-textarea {
   width: 100%; background: var(--panel); border: 1px solid var(--line); color: var(--ink);
@@ -401,6 +402,14 @@ input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .trend-bar .fill.best { background: var(--fairway); }
 .trend-labels { display: flex; gap: 6px; }
 .trend-labels span { flex: 1; text-align: center; font-size: 10px; color: var(--ink-dim); font-family: var(--mono); }
+
+.trend-chart-centered { position: relative; display: flex; align-items: stretch; gap: 6px; height: 100px; margin: 6px 0 4px; }
+.trend-zero-line { position: absolute; left: 0; right: 0; top: 50%; height: 1px; background: var(--line); z-index: 0; }
+.trend-bar-centered { flex: 1; position: relative; z-index: 1; }
+.trend-bar-centered .fill { position: absolute; left: 2px; right: 2px; border-radius: 2px; min-height: 2px; }
+.trend-bar-centered .fill.over  { top: 50%; background: var(--danger); }
+.trend-bar-centered .fill.under { bottom: 50%; background: var(--fairway); }
+.trend-bar-centered .fill.even  { top: calc(50% - 1.5px); height: 3px !important; background: var(--ink-dim); }
 
 .hole-table { width: 100%; border-collapse: collapse; font-family: var(--mono); font-size: 13px; }
 .hole-table th { text-align: left; color: var(--ink-dim); font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em; padding: 6px 4px; border-bottom: 1px solid var(--line); }

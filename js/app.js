@@ -211,6 +211,7 @@
 
     $("#roundCourseChip").textContent = round.course + " · " + new Date(round.date).toLocaleDateString() + " " + new Date(round.date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
     $("#greenDistValue").textContent = "— yds";
+    $("#greenDistSuggestion").textContent = "";
     $("#holeNum").textContent = round.currentHole;
 
     const isBuiltIn = DB.isBuiltInCourse(round.course);
@@ -535,12 +536,39 @@
       roundsList.innerHTML = rounds.map(r => {
         const s = Stats.roundSummary(r.id);
         const vsPar = s.scoreVsPar != null ? " (" + formatVsPar(s.scoreVsPar) + ")" : "";
-        return `<div class="club-stat-row">
+        const editBtn = r.ended
+          ? `<button class="edit-round-btn" data-round-id="${r.id}" title="Edit this round" style="background:none; border:none; color:var(--ink-dim); font-size:16px; padding:6px 4px 6px 12px;">✏️</button>`
+          : "";
+        return `<div class="club-stat-row" style="align-items:center;">
           <span class="name">${r.course}<br><span class="range">${new Date(r.date).toLocaleDateString()} ${new Date(r.date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span></span>
-          <span><span class="avg">${s.totalStrokes}${vsPar}</span><span class="range">${s.totalPutts} putts</span></span>
+          <span style="display:flex; align-items:center;">
+            <span style="text-align:right;"><span class="avg">${s.totalStrokes}${vsPar}</span><span class="range">${s.totalPutts} putts</span></span>
+            ${editBtn}
+          </span>
         </div>`;
       }).join("");
+      $$(".edit-round-btn").forEach(btn => {
+        btn.addEventListener("click", () => reopenRoundForEdit(btn.dataset.roundId));
+      });
     }
+  }
+
+  async function reopenRoundForEdit(roundId) {
+    const round = DB.getRound(roundId);
+    if (!round) return;
+    const activeId = DB.getActiveRoundId();
+    if (activeId && activeId !== roundId) {
+      const other = DB.getRound(activeId);
+      if (other && !other.ended) {
+        const ok = await appConfirm(`You have "${other.course}" in progress. Reopening this round for editing will replace it as your active round — you can come back to "${other.course}" afterward. Continue?`);
+        if (!ok) return;
+      }
+    }
+    round.ended = false;
+    DB.saveRound(round);
+    DB.setActiveRoundId(round.id);
+    toast("Reopened — use the hole stepper to find the hole, correct it, then End Round again");
+    showScreen("round");
   }
 
   // ---------------- Settings ----------------
@@ -722,6 +750,18 @@
     }
   });
 
+  function suggestClubForDistance(targetYards) {
+    const dist = Stats.clubDistances();
+    let best = null, bestDiff = Infinity;
+    Object.keys(dist).forEach(club => {
+      const bucket = dist[club].full;
+      if (!bucket) return; // only suggest from full-swing data, not short-game clusters
+      const diff = Math.abs(bucket.avg - targetYards);
+      if (diff < bestDiff) { bestDiff = diff; best = { club, avg: bucket.avg }; }
+    });
+    return best;
+  }
+
   $("#btnCheckGreenDist").addEventListener("click", async () => {
     const round = activeRound(); if (!round) return;
     const green = DB.getGreenForHole(round.course, round.currentHole);
@@ -730,8 +770,10 @@
       return;
     }
     const valueEl = $("#greenDistValue");
+    const suggestionEl = $("#greenDistSuggestion");
     const original = valueEl.textContent;
     valueEl.textContent = "Locking…";
+    suggestionEl.textContent = "";
     try {
       const loc = await captureLocation({
         onSample: (sample, best) => { valueEl.textContent = "±" + best.accuracy + "m…"; }
@@ -739,6 +781,13 @@
       const meters = Stats.haversine({ lat: loc.lat, lon: loc.lon }, green);
       const yards = Math.round(Stats.metersToYards(meters));
       valueEl.textContent = yards + " yds";
+      const suggestion = suggestClubForDistance(yards);
+      if (suggestion) {
+        const cat = clubCategory(suggestion.club);
+        suggestionEl.innerHTML = `Suggested: <span style="color:var(--cat-${cat}); font-weight:700;">${suggestion.club}</span> (avg ${Math.round(suggestion.avg)}y)`;
+      } else {
+        suggestionEl.textContent = "Not enough club data yet for a suggestion";
+      }
     } catch (err) {
       valueEl.textContent = original;
       toast("GPS failed: " + (err.message || "check location permission"));
