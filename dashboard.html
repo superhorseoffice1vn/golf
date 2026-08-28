@@ -75,8 +75,21 @@
           <div class="empty" id="shotMapEmpty" style="display:none;">No GPS points logged for this selection.</div>
         </div>
         <div class="stat-card">
-          <div class="title">Hole-by-hole</div>
-          <table class="hole-table" id="rdHoleTable"></table>
+          <div class="title">Scorecard</div>
+          <div class="scorecard-wrap">
+            <table class="scorecard-table" id="scorecardTable"></table>
+          </div>
+          <div class="scorecard-legend">
+            <span><span class="sc-shape sc-eagle"></span>Eagle+</span>
+            <span><span class="sc-shape sc-birdie"></span>Birdie</span>
+            <span><span class="sc-shape sc-bogey"></span>Bogey</span>
+            <span><span class="sc-shape sc-double"></span>Double+</span>
+            <span><span class="sc-shape sc-gir-legend"></span>GIR</span>
+          </div>
+        </div>
+        <div class="stat-card">
+          <div class="title">Clubs that got you on in regulation</div>
+          <div id="girClubList"><div class="empty">No GIR data for this round.</div></div>
         </div>
         <div class="stat-card">
           <div class="title">Distance per club (yards) — this round</div>

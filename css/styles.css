@@ -434,3 +434,43 @@ input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .leaflet-control-zoom a:hover { background: var(--panel-raised) !important; }
 .leaflet-control-attribution { background: rgba(15,22,17,0.75) !important; color: var(--ink-dim) !important; font-size: 10px !important; }
 .leaflet-control-attribution a { color: var(--ink-dim) !important; }
+
+/* ---------- Traditional scorecard ---------- */
+.scorecard-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.scorecard-table { border-collapse: collapse; font-family: var(--mono); font-size: 13px; }
+.scorecard-table th, .scorecard-table td {
+  padding: 8px 9px; text-align: center; border: 1px solid var(--line); min-width: 30px;
+}
+.scorecard-table th { color: var(--ink-dim); font-weight: 700; font-size: 11px; text-transform: uppercase; }
+.scorecard-table th:first-child, .scorecard-table td:first-child {
+  text-align: left; position: sticky; left: 0; background: var(--panel);
+  font-family: var(--sans); font-weight: 700; padding-left: 10px;
+}
+.scorecard-table .out-col { font-weight: 700; background: var(--panel-raised); }
+
+.sc-score-cell {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px;
+}
+.sc-eagle  { border: 2px solid var(--accent); border-radius: 50%; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); }
+.sc-birdie { border: 2px solid var(--danger); border-radius: 50%; }
+.sc-bogey  { border: 2px solid var(--ink-dim); border-radius: 3px; }
+.sc-double { border: 2px solid var(--danger); border-radius: 3px; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--danger); }
+
+.sc-gir-dot {
+  position: absolute; top: -5px; right: -5px; width: 9px; height: 9px;
+  border-radius: 50%; background: var(--fairway); border: 1.5px solid var(--panel);
+}
+
+.scorecard-legend {
+  display: flex; gap: 14px; flex-wrap: wrap; margin-top: 14px;
+  font-size: 11px; color: var(--ink-dim); align-items: center;
+}
+.scorecard-legend .sc-shape {
+  display: inline-block; width: 13px; height: 13px; margin-right: 5px; vertical-align: middle;
+}
+.scorecard-legend .sc-eagle  { border: 2px solid var(--accent); border-radius: 50%; }
+.scorecard-legend .sc-birdie { border: 2px solid var(--danger); border-radius: 50%; }
+.scorecard-legend .sc-bogey  { border: 2px solid var(--ink-dim); border-radius: 3px; }
+.scorecard-legend .sc-double { border: 2px solid var(--danger); border-radius: 3px; }
+.scorecard-legend .sc-gir-legend { background: var(--fairway); border-radius: 50%; }

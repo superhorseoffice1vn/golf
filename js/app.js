@@ -7,6 +7,7 @@
 
   let pendingShot = null; // {lat, lon, accuracy, timestamp} awaiting club choice
   const skippedTeeShotHoles = new Set(); // "roundId:hole" — unlocks On Green when the tee shot was missed
+  const strokesTouchedHoles = new Set(); // "roundId:hole" — user manually overrode Strokes, stop auto-syncing to Putts
   let pendingPlayerId = null;
   let initialPickerFlow = false;
 
@@ -254,6 +255,7 @@
     $("#btnLogShot .cta").textContent = "Log " + ordinal(shotCount + 1) + " Shot";
 
     const puttsBlock = $("#puttsBlock");
+    const wasAlreadyVisible = puttsBlock.style.display !== "none";
     if (hasGreen) {
       puttsBlock.style.display = "";
       const existing = DB.getHoleSummary(round.id, round.currentHole);
@@ -268,15 +270,18 @@
       } else {
         parStepperControl.style.display = "";
         parStepperLabel.style.display = "";
-        $("#parCount").textContent = existing && existing.par != null ? existing.par : 4;
+        if (!wasAlreadyVisible) $("#parCount").textContent = existing && existing.par != null ? existing.par : 4;
       }
 
-      $("#puttsCount").textContent = existing ? existing.putts : 0;
-      // Strokes defaults to shots+putts, but only when not already explicitly
-      // saved for this hole — once set, it's independent of further edits.
-      $("#strokesCount").textContent = existing && existing.strokes != null
-        ? existing.strokes
-        : shotCount + (existing ? existing.putts : 0);
+      // Only (re)initialize Putts/Strokes the moment this block first appears
+      // for this hole visit — if it's already showing, leave whatever's
+      // there alone, so logging another shot mid-edit can't wipe your taps.
+      if (!wasAlreadyVisible) {
+        $("#puttsCount").textContent = existing ? existing.putts : 0;
+        $("#strokesCount").textContent = existing && existing.strokes != null
+          ? existing.strokes
+          : shotCount + (existing ? existing.putts : 0);
+      }
     } else {
       puttsBlock.style.display = "none";
     }
@@ -353,17 +358,34 @@
   $("#parMinus").addEventListener("click", () => { $("#parCount").textContent = Math.max(3, getParInput() - 1); });
   $("#parPlus").addEventListener("click", () => { $("#parCount").textContent = Math.min(6, getParInput() + 1); });
 
-  // Strokes stepper — defaults to shots+putts but is independently editable,
-  // so penalty strokes, miscounts, or a missed tee-shot log can be corrected
-  // without touching the underlying GPS shot data used for club distances.
+  // Strokes stepper — defaults to shots+putts and STAYS in sync with Putts
+  // as you tap it, unless you manually adjust Strokes yourself (penalty
+  // stroke, missed tee-shot log, etc.) — at that point it stops following
+  // Putts for this hole, since we can no longer tell what your override
+  // should track. Re-syncs automatically again once you move to a new hole.
   function getStrokes() { return parseInt($("#strokesCount").textContent, 10) || 0; }
-  $("#strokesMinus").addEventListener("click", () => { $("#strokesCount").textContent = Math.max(0, getStrokes() - 1); });
-  $("#strokesPlus").addEventListener("click", () => { $("#strokesCount").textContent = Math.min(20, getStrokes() + 1); });
+  function currentHoleKey() {
+    const round = activeRound();
+    return round ? round.id + ":" + round.currentHole : null;
+  }
+  $("#strokesMinus").addEventListener("click", () => {
+    $("#strokesCount").textContent = Math.max(0, getStrokes() - 1);
+    const key = currentHoleKey(); if (key) strokesTouchedHoles.add(key);
+  });
+  $("#strokesPlus").addEventListener("click", () => {
+    $("#strokesCount").textContent = Math.min(20, getStrokes() + 1);
+    const key = currentHoleKey(); if (key) strokesTouchedHoles.add(key);
+  });
 
   // Putts stepper
   function getPutts() { return parseInt($("#puttsCount").textContent, 10) || 0; }
-  $("#puttsMinus").addEventListener("click", () => { $("#puttsCount").textContent = Math.max(0, getPutts() - 1); });
-  $("#puttsPlus").addEventListener("click", () => { $("#puttsCount").textContent = Math.min(20, getPutts() + 1); });
+  function syncStrokesToPutts(delta) {
+    const key = currentHoleKey();
+    if (key && strokesTouchedHoles.has(key)) return; // user has taken manual control this hole
+    $("#strokesCount").textContent = Math.max(0, getStrokes() + delta);
+  }
+  $("#puttsMinus").addEventListener("click", () => { $("#puttsCount").textContent = Math.max(0, getPutts() - 1); syncStrokesToPutts(-1); });
+  $("#puttsPlus").addEventListener("click", () => { $("#puttsCount").textContent = Math.min(20, getPutts() + 1); syncStrokesToPutts(1); });
 
   $("#btnFinishHole").addEventListener("click", () => {
     const round = activeRound(); if (!round) return;

@@ -183,6 +183,24 @@
         if (!clubRaw[cur.club]) clubRaw[cur.club] = [];
         clubRaw[cur.club].push(toYards(dMeters));
       }
+
+      // GIR (green in regulation): reached the green in (par - 2) shots or
+      // fewer. Needs a Green marker logged for this hole to know when the
+      // green was actually reached; can't be determined otherwise.
+      let girHit = null, girClub = null;
+      if (par != null && par - 2 >= 1) {
+        const greenIdx = posRows.findIndex(r => r.type === "Green");
+        if (greenIdx > 0) {
+          const shotsToGreen = posRows.slice(0, greenIdx).filter(r => r.type === "Shot").length;
+          girHit = shotsToGreen > 0 && shotsToGreen <= (par - 2);
+          if (girHit) {
+            const lastShot = posRows.slice(0, greenIdx).reverse().find(r => r.type === "Shot");
+            girClub = lastShot ? lastShot.club : null;
+          }
+        }
+      }
+      perHole[h].girHit = girHit;
+      perHole[h].girClub = girClub;
     });
 
     const totalStrokes = Object.values(perHole).reduce((s, h) => s + h.strokes, 0);
@@ -390,16 +408,45 @@
     return n > 0 ? "+" + n : String(n);
   }
 
-  function renderHoleTable(stats) {
-    const rows = stats.holesSet.map(h => {
-      const ph = stats.perHole[h];
-      return `<tr><td>${h}</td><td>${ph.par != null ? ph.par : "—"}</td><td>${ph.strokes}</td><td>${ph.putts}</td></tr>`;
-    }).join("");
-    $("#rdHoleTable").innerHTML = `
-      <tr><th>Hole</th><th>Par</th><th>Strokes</th><th>Putts</th></tr>
-      ${rows || '<tr><td colspan="4" class="empty">No holes logged.</td></tr>'}
-      ${stats.holesSet.length ? `<tr class="tot"><td>Total</td><td>${stats.totalPar || "—"}</td><td>${stats.totalStrokes}</td><td>${stats.totalPutts}</td></tr>` : ""}
-    `;
+  function scoreCellHtml(ph) {
+    const dot = ph.girHit ? '<span class="sc-gir-dot" title="Green in regulation"></span>' : "";
+    if (ph.par == null) return `<span class="sc-score-cell">${ph.strokes}${dot}</span>`;
+    const diff = ph.strokes - ph.par;
+    let cls = "";
+    if (diff <= -2) cls = "sc-eagle";
+    else if (diff === -1) cls = "sc-birdie";
+    else if (diff === 1) cls = "sc-bogey";
+    else if (diff >= 2) cls = "sc-double";
+    return `<span class="sc-score-cell ${cls}">${ph.strokes}${dot}</span>`;
+  }
+
+  function renderScorecard(stats) {
+    const holes = stats.holesSet;
+    const holeHeader = holes.map(h => `<th>${h}</th>`).join("");
+    const parRow = holes.map(h => `<td>${stats.perHole[h].par != null ? stats.perHole[h].par : "—"}</td>`).join("");
+    const scoreRow = holes.map(h => `<td>${scoreCellHtml(stats.perHole[h])}</td>`).join("");
+    const puttsRow = holes.map(h => `<td>${stats.perHole[h].putts}</td>`).join("");
+
+    $("#scorecardTable").innerHTML = holes.length ? `
+      <tr><th>Hole</th>${holeHeader}<th class="out-col">Out</th></tr>
+      <tr><th>Par</th>${parRow}<td class="out-col">${stats.totalPar || "—"}</td></tr>
+      <tr><th>Score</th>${scoreRow}<td class="out-col">${stats.totalStrokes}</td></tr>
+      <tr><th>Putts</th>${puttsRow}<td class="out-col">${stats.totalPutts}</td></tr>
+    ` : "";
+
+    const girHoles = holes.filter(h => stats.perHole[h].girHit);
+    const girList = $("#girClubList");
+    if (girHoles.length === 0) {
+      girList.innerHTML = '<div class="empty">No greens hit in regulation this round \u2014 or no Green marker was logged to detect it.</div>';
+    } else {
+      girList.innerHTML = girHoles.map(h => {
+        const ph = stats.perHole[h];
+        return `<div class="club-stat-row">
+          <span class="name">Hole ${h} <span class="range">(Par ${ph.par})</span></span>
+          <span class="avg">${ph.girClub || "—"}</span>
+        </div>`;
+      }).join("");
+    }
   }
 
   function selectRound(key) {
@@ -417,7 +464,7 @@
     $("#rdHoles").textContent = stats.holesPlayed;
     $("#rdVsPar").textContent = formatVsPar(stats.scoreVsPar);
 
-    renderHoleTable(stats);
+    renderScorecard(stats);
     renderClubDist("#rdClubDist", stats.clubDistances);
 
     selectedMapHole = "all";
