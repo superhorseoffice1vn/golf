@@ -472,6 +472,51 @@
     updateShotMap(rd);
   }
 
+  // Aggregates GIR club data across every round, grouped by course then
+  // hole — so it stays meaningful once more than one course is in the data,
+  // rather than mixing different courses' holes together.
+  function renderGirAllTime(roundStats) {
+    const byCourseHole = {}; // "course|hole" -> { course, hole, par, clubs: {club: count} }
+    roundStats.forEach(x => {
+      const course = x.rd.course || "Round";
+      x.stats.holesSet.forEach(h => {
+        const ph = x.stats.perHole[h];
+        if (!ph.girHit) return;
+        const key = course + "|" + h;
+        if (!byCourseHole[key]) byCourseHole[key] = { course, hole: h, par: ph.par, clubs: {} };
+        const club = ph.girClub || "Unknown";
+        byCourseHole[key].clubs[club] = (byCourseHole[key].clubs[club] || 0) + 1;
+      });
+    });
+
+    const el = $("#atGirClubList");
+    const entries = Object.values(byCourseHole);
+    if (entries.length === 0) {
+      el.innerHTML = '<div class="empty">No greens hit in regulation yet.</div>';
+      return;
+    }
+    const byCourse = {};
+    entries.forEach(e => { (byCourse[e.course] = byCourse[e.course] || []).push(e); });
+
+    el.innerHTML = Object.keys(byCourse).map(course => {
+      const holes = byCourse[course].sort((a, b) => a.hole - b.hole);
+      const rows = holes.map(h => {
+        const clubText = Object.entries(h.clubs)
+          .sort((a, b) => b[1] - a[1])
+          .map(([club, count]) => count > 1 ? `${club} (×${count})` : club)
+          .join(", ");
+        return `<div class="club-stat-row">
+          <span class="name">Hole ${h.hole} <span class="range">(Par ${h.par})</span></span>
+          <span class="avg" style="font-size:13px;">${clubText}</span>
+        </div>`;
+      }).join("");
+      return `<div style="margin-bottom:14px;">
+        <div class="field-label" style="margin-bottom:6px;">${course}</div>
+        ${rows}
+      </div>`;
+    }).join("");
+  }
+
   function renderAllTime() {
     const roundStats = rounds.map(rd => ({ rd, stats: computeRoundStats(rd.rows) }));
     const totalStrokes = roundStats.reduce((s, x) => s + x.stats.totalStrokes, 0);
@@ -520,6 +565,7 @@
       atDist[c] = { full: summarize(full), short: summarize(short) };
     });
     renderClubDist("#atClubDist", atDist);
+    renderGirAllTime(roundStats);
 
     // Rounds list
     const listEl = $("#atRoundsList");
