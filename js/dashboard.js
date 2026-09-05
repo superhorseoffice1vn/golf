@@ -84,22 +84,31 @@
 
   // A club like a 7-iron gets hit both full-swing (approach shots) and as a
   // partial pitch/chip around the green — averaging both together produces a
-  // meaningless blended number. Split on the largest proportional gap in the
-  // sorted distances rather than treating short shots as statistical
-  // "outliers": they're a genuinely different shot type, not noise.
+  // meaningless blended number. Split on every proportional gap large enough
+  // to mark a real change in shot type — not just the single biggest one,
+  // since a versatile club (a wedge hit anywhere from a 20y pitch to a full
+  // 125y shot) can have more than two natural distance groups. Whichever
+  // cluster ends up with the longest shots is "full swing"; everything
+  // shorter gets merged into one "short shots" bucket for display.
   const FULL_SWING_GAP_RATIO = 1.6;
+  // Below this, it's not a real shot — GPS jitter or a mis-tap while
+  // standing still, not an actual swing.
+  const MIN_SHOT_YARDS = 3;
   function splitFullSwing(yards) {
     const arr = yards.slice().sort((a, b) => a - b);
     if (arr.length < 2) return { full: arr, short: [] };
-    let splitIdx = -1, maxRatio = 1;
+    const splitPoints = [];
     for (let i = 0; i < arr.length - 1; i++) {
-      const ratio = arr[i + 1] / arr[i];
-      if (ratio > maxRatio) { maxRatio = ratio; splitIdx = i; }
+      if (arr[i + 1] / arr[i] >= FULL_SWING_GAP_RATIO) splitPoints.push(i);
     }
-    if (maxRatio >= FULL_SWING_GAP_RATIO) {
-      return { full: arr.slice(splitIdx + 1), short: arr.slice(0, splitIdx + 1) };
-    }
-    return { full: arr, short: [] };
+    if (splitPoints.length === 0) return { full: arr, short: [] };
+    const clusters = [];
+    let start = 0;
+    splitPoints.forEach(idx => { clusters.push(arr.slice(start, idx + 1)); start = idx + 1; });
+    clusters.push(arr.slice(start));
+    const full = clusters[clusters.length - 1];
+    const short = clusters.slice(0, -1).flat();
+    return { full, short };
   }
   function summarize(arr) {
     if (!arr.length) return null;
@@ -180,8 +189,10 @@
         if ((cur.accuracy || 0) > 25 || (next.accuracy || 0) > 25) continue;
         const dMeters = haversine(cur, next);
         if (dMeters >= 2000) continue; // sanity cap, filters bad fixes
+        const yards = toYards(dMeters);
+        if (yards < MIN_SHOT_YARDS) continue; // noise/mis-tap, not a real shot
         if (!clubRaw[cur.club]) clubRaw[cur.club] = [];
-        clubRaw[cur.club].push(toYards(dMeters));
+        clubRaw[cur.club].push(yards);
       }
 
       // GIR (green in regulation): reached the green in (par - 2) shots or

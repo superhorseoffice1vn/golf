@@ -19,24 +19,33 @@ const Stats = (() => {
   // partial pitch/chip around the green — averaging both together produces a
   // meaningless blended number. Rather than treat short shots as statistical
   // "outliers" around one mean (they're not noise, they're a genuinely
-  // different shot type), split on the largest proportional gap in the
-  // sorted distances: full-swing and finesse shots for the same club are
-  // normally many multiples apart, while natural full-swing variance from
-  // wind/lie isn't. Below that gap threshold, treat it as one cohesive group.
+  // different shot type), split on every proportional gap large enough to
+  // mark a real change in shot type — not just the single biggest one, since
+  // a versatile club (a wedge hit anywhere from a 20y pitch to a full 125y
+  // shot) can have more than two natural distance groups. Whichever cluster
+  // ends up with the longest shots is "full swing"; everything shorter gets
+  // merged into one "short shots" bucket for display.
   const FULL_SWING_GAP_RATIO = 1.6;
+  // Below this, it's not a real shot — GPS jitter or a mis-tap while
+  // standing still, not an actual swing. No genuine golf shot, even a tiny
+  // chip, travels less than a few yards.
+  const MIN_SHOT_YARDS = 3;
 
   function splitFullSwing(yards) {
     const arr = yards.slice().sort((a, b) => a - b);
     if (arr.length < 2) return { full: arr, short: [] };
-    let splitIdx = -1, maxRatio = 1;
+    const splitPoints = [];
     for (let i = 0; i < arr.length - 1; i++) {
-      const ratio = arr[i + 1] / arr[i];
-      if (ratio > maxRatio) { maxRatio = ratio; splitIdx = i; }
+      if (arr[i + 1] / arr[i] >= FULL_SWING_GAP_RATIO) splitPoints.push(i);
     }
-    if (maxRatio >= FULL_SWING_GAP_RATIO) {
-      return { full: arr.slice(splitIdx + 1), short: arr.slice(0, splitIdx + 1) };
-    }
-    return { full: arr, short: [] };
+    if (splitPoints.length === 0) return { full: arr, short: [] };
+    const clusters = [];
+    let start = 0;
+    splitPoints.forEach(idx => { clusters.push(arr.slice(start, idx + 1)); start = idx + 1; });
+    clusters.push(arr.slice(start));
+    const full = clusters[clusters.length - 1]; // sorted ascending, so the last cluster is always the longest-distance one
+    const short = clusters.slice(0, -1).flat();
+    return { full, short };
   }
 
   function summarize(arr) {
@@ -51,7 +60,7 @@ const Stats = (() => {
   // marker was logged) has no "next point" so it contributes no distance.
   function clubDistances(roundIds = null) {
     const rounds = roundIds ? roundIds : DB.getRounds().map(r => r.id);
-    const byClub = {}; // club -> [distances in meters]
+    const byClub = {}; // club -> [distances in yards]
 
     rounds.forEach(roundId => {
       const holes = [...new Set(DB.entriesForRound(roundId).map(e => e.hole))];
@@ -65,17 +74,18 @@ const Stats = (() => {
           // at either end throws the calculated distance off badly.
           if (cur.accuracy > 25 || next.accuracy > 25) continue;
           const d = haversine(cur, next);
-          if (d < 2000) { // sanity cap ~2200yd, filters bad GPS fixes
-            if (!byClub[cur.club]) byClub[cur.club] = [];
-            byClub[cur.club].push(d);
-          }
+          if (d >= 2000) continue; // sanity cap ~2200yd, filters bad GPS fixes
+          const y = metersToYards(d);
+          if (y < MIN_SHOT_YARDS) continue; // noise/mis-tap, not a real shot
+          if (!byClub[cur.club]) byClub[cur.club] = [];
+          byClub[cur.club].push(y);
         }
       });
     });
 
     const out = {};
     Object.keys(byClub).forEach(club => {
-      const yards = byClub[club].map(metersToYards);
+      const yards = byClub[club];
       const { full, short } = splitFullSwing(yards);
       out[club] = { full: summarize(full), short: summarize(short) };
     });
