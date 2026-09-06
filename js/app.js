@@ -6,6 +6,7 @@
   const $$ = (sel) => Array.from(document.querySelectorAll(sel));
 
   let pendingShot = null; // {lat, lon, accuracy, timestamp} awaiting club choice
+  let editingEntryId = null; // set when reopening the club picker to correct an already-logged shot
   const skippedTeeShotHoles = new Set(); // "roundId:hole" — unlocks On Green when the tee shot was missed
   const strokesTouchedHoles = new Set(); // "roundId:hole" — user manually overrode Strokes, stop auto-syncing to Putts
   let pendingPlayerId = null;
@@ -231,7 +232,11 @@
       const row = document.createElement("div");
       row.className = "shot-row" + (e.type === "Green" ? " green" : "");
       const time = new Date(e.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-      row.innerHTML = `<span class="club-tag">${e.type === "Green" ? "📍 On green" : (i + 1) + ". " + e.club}</span><span class="meta">${time} · <span class="${accuracyClass(e.accuracy)}">±${e.accuracy}m</span></span>`;
+      row.innerHTML = `<span class="club-tag">${e.type === "Green" ? "📍 On green" : (i + 1) + ". " + e.club}</span><span class="meta">${time} · <span class="${accuracyClass(e.accuracy)}">±${e.accuracy}m</span>${e.type === "Shot" ? ' · <span style="text-decoration:underline;">edit</span>' : ""}</span>`;
+      if (e.type === "Shot") {
+        row.style.cursor = "pointer";
+        row.addEventListener("click", () => openClubPickerForEdit(e));
+      }
       log.appendChild(row);
     });
 
@@ -465,9 +470,27 @@
     $("#screen-club").classList.add("active");
   }
 
+  function openClubPickerForEdit(entry) {
+    pendingShot = null;
+    editingEntryId = entry.id;
+    $("#clubPickerHint").textContent = "Editing this shot — pick the correct club.";
+    openClubPicker();
+  }
+
   function chooseClub(club) {
     const round = activeRound();
-    if (!round || !pendingShot) { showScreen("round"); return; }
+    if (!round) { showScreen("round"); return; }
+
+    if (editingEntryId) {
+      DB.updateEntry(editingEntryId, { club, synced: false });
+      Sync.attempt();
+      editingEntryId = null;
+      $("#clubPickerHint").textContent = "GPS locked in — pick the club you just hit.";
+      showScreen("round");
+      return;
+    }
+
+    if (!pendingShot) { showScreen("round"); return; }
     const entry = {
       id: DB.uid(), roundId: round.id, hole: round.currentHole, seq: Date.now(),
       type: "Shot", club, lat: pendingShot.lat, lon: pendingShot.lon,
@@ -481,6 +504,8 @@
 
   $("#btnCancelClub").addEventListener("click", () => {
     pendingShot = null;
+    editingEntryId = null;
+    $("#clubPickerHint").textContent = "GPS locked in — pick the club you just hit.";
     showScreen("round");
   });
 

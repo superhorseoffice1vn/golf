@@ -183,6 +183,7 @@
       perHole[h] = { shots, putts, strokes, par };
 
       const posRows = holeRows.filter(r => (r.type === "Shot" || r.type === "Green") && r.lat != null && r.lon != null);
+      let holeDistance = 0;
       for (let i = 0; i < posRows.length - 1; i++) {
         const cur = posRows[i], next = posRows[i + 1];
         if (cur.type !== "Shot" || !cur.club) continue;
@@ -193,12 +194,14 @@
         if (yards < MIN_SHOT_YARDS) continue; // noise/mis-tap, not a real shot
         if (!clubRaw[cur.club]) clubRaw[cur.club] = [];
         clubRaw[cur.club].push(yards);
+        holeDistance += yards;
       }
+      perHole[h].distance = Math.round(holeDistance);
 
       // GIR (green in regulation): reached the green in (par - 2) shots or
       // fewer. Needs a Green marker logged for this hole to know when the
       // green was actually reached; can't be determined otherwise.
-      let girHit = null, girClub = null;
+      let girHit = null, girClub = null, girDistance = null;
       if (par != null && par - 2 >= 1) {
         const greenIdx = posRows.findIndex(r => r.type === "Green");
         if (greenIdx > 0) {
@@ -207,11 +210,13 @@
           if (girHit) {
             const lastShot = posRows.slice(0, greenIdx).reverse().find(r => r.type === "Shot");
             girClub = lastShot ? lastShot.club : null;
+            if (lastShot) girDistance = Math.round(toYards(haversine(lastShot, posRows[greenIdx])));
           }
         }
       }
       perHole[h].girHit = girHit;
       perHole[h].girClub = girClub;
+      perHole[h].girDistance = girDistance;
     });
 
     const totalStrokes = Object.values(perHole).reduce((s, h) => s + h.strokes, 0);
@@ -270,8 +275,32 @@
     const points = rd.rows.filter(r =>
       r.lat != null && r.lon != null && (r.type === "Shot" || r.type === "Green") &&
       (selectedMapHole === "all" ? true : r.hole === selectedMapHole)
-    );
+    ).sort((a, b) => a.timestamp - b.timestamp);
     renderShotMap(points, selectedMapHole === "all");
+    renderShotMapDetail(points);
+  }
+
+  function renderShotMapDetail(points) {
+    const container = $("#shotMapDetail");
+    // Only meaningful for a single selected hole — "All holes" mixes
+    // sequences from different holes together, which reads as noise.
+    if (selectedMapHole === "all" || points.length === 0) {
+      container.innerHTML = "";
+      return;
+    }
+    container.innerHTML = points.map((p, i) => {
+      const isGreen = p.type === "Green";
+      let distText = "";
+      if (!isGreen && i < points.length - 1) {
+        const yards = Math.round(toYards(haversine(p, points[i + 1])));
+        distText = yards + "y";
+      }
+      const label = isGreen ? "📍 On green" : (i + 1) + ". " + p.club;
+      return `<div class="shot-row${isGreen ? " green" : ""}">
+        <span class="club-tag">${label}</span>
+        <span class="meta">${distText}</span>
+      </div>`;
+    }).join("");
   }
 
   function renderShotMap(points, colorByHole) {
@@ -376,7 +405,7 @@
     });
   }
 
-  function renderClubDist(sel, dist) {
+  function renderClubDist(sel, dist, showShortLine = true) {
     const el = $(sel);
     const clubs = Object.keys(dist).sort((a, b) => {
       const av = dist[a].full ? dist[a].full.avg : dist[a].short.avg;
@@ -391,7 +420,7 @@
     el.innerHTML = clubs.map(c => {
       const d = dist[c];
       const main = d.full || d.short;
-      const mainLabel = d.full ? "" : " (short shots only)";
+      const mainLabel = d.full ? "" : " (short shots only — no full swing logged yet)";
       const cat = clubCategory(c);
       const pct = Math.max(6, Math.round((main.avg / maxAvg) * 100));
       let html = `<div class="dist-row">
@@ -401,7 +430,7 @@
           <span><span class="avg">${Math.round(main.avg)}y</span><span class="range">${Math.round(main.min)}–${Math.round(main.max)} · n=${main.count}</span></span>
         </div>
       </div>`;
-      if (d.full && d.short) {
+      if (showShortLine && d.full && d.short) {
         html += `<div class="dist-row" style="padding-top:0; opacity:0.7;">
           <div class="dist-row-content">
             <span class="name" style="font-weight:400; font-size:12px; padding-left:16px;">↳ Short shots</span>
@@ -411,6 +440,14 @@
       }
       return html;
     }).join("");
+  }
+
+  function formatDuration(rows) {
+    const timestamps = rows.map(r => r.timestamp.getTime());
+    if (timestamps.length < 2) return "";
+    const minutes = Math.round((Math.max(...timestamps) - Math.min(...timestamps)) / 60000);
+    const h = Math.floor(minutes / 60), m = minutes % 60;
+    return h > 0 ? `${h}h ${m}m` : `${m}m`;
   }
 
   function formatVsPar(n) {
@@ -437,12 +474,15 @@
     const parRow = holes.map(h => `<td>${stats.perHole[h].par != null ? stats.perHole[h].par : "—"}</td>`).join("");
     const scoreRow = holes.map(h => `<td>${scoreCellHtml(stats.perHole[h])}</td>`).join("");
     const puttsRow = holes.map(h => `<td>${stats.perHole[h].putts}</td>`).join("");
+    const yardsRow = holes.map(h => `<td>${stats.perHole[h].distance || "—"}</td>`).join("");
+    const totalYards = holes.reduce((s, h) => s + (stats.perHole[h].distance || 0), 0);
 
     $("#scorecardTable").innerHTML = holes.length ? `
       <tr><th>Hole</th>${holeHeader}<th class="out-col">Out</th></tr>
       <tr><th>Par</th>${parRow}<td class="out-col">${stats.totalPar || "—"}</td></tr>
       <tr><th>Score</th>${scoreRow}<td class="out-col">${stats.totalStrokes}</td></tr>
       <tr><th>Putts</th>${puttsRow}<td class="out-col">${stats.totalPutts}</td></tr>
+      <tr><th>Yards</th>${yardsRow}<td class="out-col">${totalYards || "—"}</td></tr>
     ` : "";
 
     const girHoles = holes.filter(h => stats.perHole[h].girHit);
@@ -454,7 +494,7 @@
         const ph = stats.perHole[h];
         return `<div class="club-stat-row">
           <span class="name">Hole ${h} <span class="range">(Par ${ph.par})</span></span>
-          <span class="avg">${ph.girClub || "—"}</span>
+          <span class="avg">${ph.girClub || "—"}${ph.girDistance != null ? ` (${ph.girDistance}y)` : ""}</span>
         </div>`;
       }).join("");
     }
@@ -468,6 +508,7 @@
 
     $("#rdCourse").textContent = rd.course || "Round";
     $("#rdDate").textContent = rd.date.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" }) + " · " + rd.date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    $("#rdDuration").textContent = formatDuration(rd.rows);
 
     const stats = computeRoundStats(rd.rows);
     $("#rdStrokes").textContent = stats.totalStrokes;
@@ -487,7 +528,7 @@
   // hole — so it stays meaningful once more than one course is in the data,
   // rather than mixing different courses' holes together.
   function renderGirAllTime(roundStats) {
-    const byCourseHole = {}; // "course|hole" -> { course, hole, par, clubs: {club: count} }
+    const byCourseHole = {}; // "course|hole" -> { course, hole, par, clubs: {club: {count, distances:[]}} }
     roundStats.forEach(x => {
       const course = x.rd.course || "Round";
       x.stats.holesSet.forEach(h => {
@@ -496,7 +537,9 @@
         const key = course + "|" + h;
         if (!byCourseHole[key]) byCourseHole[key] = { course, hole: h, par: ph.par, clubs: {} };
         const club = ph.girClub || "Unknown";
-        byCourseHole[key].clubs[club] = (byCourseHole[key].clubs[club] || 0) + 1;
+        if (!byCourseHole[key].clubs[club]) byCourseHole[key].clubs[club] = { count: 0, distances: [] };
+        byCourseHole[key].clubs[club].count++;
+        if (ph.girDistance != null) byCourseHole[key].clubs[club].distances.push(ph.girDistance);
       });
     });
 
@@ -513,8 +556,12 @@
       const holes = byCourse[course].sort((a, b) => a.hole - b.hole);
       const rows = holes.map(h => {
         const clubText = Object.entries(h.clubs)
-          .sort((a, b) => b[1] - a[1])
-          .map(([club, count]) => count > 1 ? `${club} (×${count})` : club)
+          .sort((a, b) => b[1].count - a[1].count)
+          .map(([club, info]) => {
+            const avgDist = info.distances.length ? Math.round(info.distances.reduce((s, d) => s + d, 0) / info.distances.length) : null;
+            const distText = avgDist != null ? ` (${avgDist}y)` : "";
+            return info.count > 1 ? `${club} ×${info.count}${distText}` : `${club}${distText}`;
+          })
           .join(", ");
         return `<div class="club-stat-row">
           <span class="name">Hole ${h.hole} <span class="range">(Par ${h.par})</span></span>
@@ -653,7 +700,7 @@
       const { full, short } = splitFullSwing(allRaw[c]);
       atDist[c] = { full: summarize(full), short: summarize(short) };
     });
-    renderClubDist("#atClubDist", atDist);
+    renderClubDist("#atClubDist", atDist, false);
     renderGirAllTime(roundStats);
 
     // Rounds list
