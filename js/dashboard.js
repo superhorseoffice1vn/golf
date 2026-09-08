@@ -201,22 +201,41 @@
       // GIR (green in regulation): reached the green in (par - 2) shots or
       // fewer. Needs a Green marker logged for this hole to know when the
       // green was actually reached; can't be determined otherwise.
-      let girHit = null, girClub = null, girDistance = null;
-      if (par != null && par - 2 >= 1) {
-        const greenIdx = posRows.findIndex(r => r.type === "Green");
-        if (greenIdx > 0) {
-          const shotsToGreen = posRows.slice(0, greenIdx).filter(r => r.type === "Shot").length;
-          girHit = shotsToGreen > 0 && shotsToGreen <= (par - 2);
-          if (girHit) {
-            const lastShot = posRows.slice(0, greenIdx).reverse().find(r => r.type === "Shot");
-            girClub = lastShot ? lastShot.club : null;
-            if (lastShot) girDistance = Math.round(toYards(haversine(lastShot, posRows[greenIdx])));
-          }
+      let girHit = null, girClub = null, girDistance = null, shotsToGreen = null;
+      const greenIdx = posRows.findIndex(r => r.type === "Green");
+      if (par != null && par - 2 >= 1 && greenIdx > 0) {
+        shotsToGreen = posRows.slice(0, greenIdx).filter(r => r.type === "Shot").length;
+        girHit = shotsToGreen > 0 && shotsToGreen <= (par - 2);
+        if (girHit) {
+          const lastShot = posRows.slice(0, greenIdx).reverse().find(r => r.type === "Shot");
+          girClub = lastShot ? lastShot.club : null;
+          if (lastShot) girDistance = Math.round(toYards(haversine(lastShot, posRows[greenIdx])));
         }
       }
       perHole[h].girHit = girHit;
       perHole[h].girClub = girClub;
       perHole[h].girDistance = girDistance;
+
+      // Tee shot = the very first logged point of the hole, when it's a real
+      // shot (not one that used the "forgot to log it" skip, which leaves no
+      // shot at position 0). Also flag whether THIS shot was the one that
+      // reached GIR (shotsToGreen === 1 means the tee shot alone got there) —
+      // that's the signal for weighting tee-club suggestions by outcome.
+      let teeShot = null;
+      if (posRows.length > 1 && posRows[0].type === "Shot" && posRows[0].club) {
+        const cur = posRows[0], next = posRows[1];
+        if ((cur.accuracy || 0) <= 25 && (next.accuracy || 0) <= 25) {
+          const dMeters = haversine(cur, next);
+          if (dMeters < 2000) {
+            const yards = toYards(dMeters);
+            if (yards >= MIN_SHOT_YARDS) {
+              const gir = girHit === true && shotsToGreen === 1;
+              teeShot = { club: cur.club, distance: yards, gir };
+            }
+          }
+        }
+      }
+      perHole[h].teeShot = teeShot;
     });
 
     const totalStrokes = Object.values(perHole).reduce((s, h) => s + h.strokes, 0);
@@ -527,6 +546,103 @@
   // Aggregates GIR club data across every round, grouped by course then
   // hole — so it stays meaningful once more than one course is in the data,
   // rather than mixing different courses' holes together.
+  // Suggests the closest-matching full-swing club for a target distance —
+  // same matching logic as the phone app's rangefinder suggestion.
+  function closestClub(targetYards, dist) {
+    let best = null, bestDiff = Infinity;
+    Object.keys(dist).forEach(club => {
+      const bucket = dist[club].full;
+      if (!bucket) return;
+      const diff = Math.abs(bucket.avg - targetYards);
+      if (diff < bestDiff) { bestDiff = diff; best = { club, avg: bucket.avg }; }
+    });
+    return best;
+  }
+
+  // A club needs at least this many tee attempts at a hole before its GIR
+  // rate is trusted enough to override the distance-matched suggestion —
+  // below this, "2 for 2" is a coin flip, not a pattern.
+  const TEE_GIR_MIN_SAMPLES = 5;
+  // And even then, it must beat the distance-suggested club's own GIR rate
+  // by this many percentage points — a marginal edge isn't worth switching for.
+  const TEE_GIR_OVERRIDE_MARGIN = 0.20;
+
+  function renderTeeClubSuggestions(roundStats, atDist) {
+    const byCourseHole = {}; // "course|hole" -> { course, hole, clubs: {club: {count, gir, distances:[]}} }
+    roundStats.forEach(x => {
+      const course = x.rd.course || "Round";
+      x.stats.holesSet.forEach(h => {
+        const ts = x.stats.perHole[h].teeShot;
+        if (!ts) return;
+        const key = course + "|" + h;
+        if (!byCourseHole[key]) byCourseHole[key] = { course, hole: h, clubs: {} };
+        if (!byCourseHole[key].clubs[ts.club]) byCourseHole[key].clubs[ts.club] = { count: 0, gir: 0, distances: [] };
+        const c = byCourseHole[key].clubs[ts.club];
+        c.count++;
+        c.distances.push(ts.distance);
+        if (ts.gir) c.gir++;
+      });
+    });
+
+    const el = $("#atTeeClubList");
+    const entries = Object.values(byCourseHole);
+    if (entries.length === 0) {
+      el.innerHTML = '<div class="empty">No tee shots logged yet.</div>';
+      return;
+    }
+    const byCourse = {};
+    entries.forEach(e => { (byCourse[e.course] = byCourse[e.course] || []).push(e); });
+
+    el.innerHTML = Object.keys(byCourse).map(course => {
+      const holes = byCourse[course].sort((a, b) => a.hole - b.hole);
+      const rows = holes.map(h => {
+        const allDistances = Object.values(h.clubs).flatMap(c => c.distances);
+        const avgDist = Math.round(allDistances.reduce((s, d) => s + d, 0) / allDistances.length);
+        const distSuggestion = closestClub(avgDist, atDist);
+
+        // Look for a club with enough tee attempts here to trust its GIR rate.
+        let girBest = null;
+        Object.entries(h.clubs).forEach(([club, info]) => {
+          if (info.count < TEE_GIR_MIN_SAMPLES) return;
+          const rate = info.gir / info.count;
+          if (!girBest || rate > girBest.rate) girBest = { club, rate, count: info.count, gir: info.gir };
+        });
+
+        let suggestedClub = distSuggestion ? distSuggestion.club : null;
+        let basisHtml = `<span style="color:var(--ink-dim);">(distance match)</span>`;
+        if (girBest) {
+          const distClubInfo = suggestedClub ? h.clubs[suggestedClub] : null;
+          const distClubGirRate = distClubInfo ? distClubInfo.gir / distClubInfo.count : 0;
+          if (girBest.club !== suggestedClub && (girBest.rate - distClubGirRate) >= TEE_GIR_OVERRIDE_MARGIN) {
+            suggestedClub = girBest.club;
+            basisHtml = `<span style="color:var(--fairway);">(${Math.round(girBest.rate * 100)}% GIR, n=${girBest.count})</span>`;
+          }
+        }
+
+        const cat = suggestedClub ? clubCategory(suggestedClub) : "other";
+        const usedText = Object.entries(h.clubs)
+          .sort((a, b) => b[1].count - a[1].count)
+          .map(([club, info]) => `${club} ×${info.count} (${info.gir} GIR)`)
+          .join(", ");
+
+        return `<div class="club-stat-row">
+          <span class="name">Hole ${h.hole} <span class="range">(avg ${avgDist}y off the tee)</span></span>
+          <span class="avg" style="font-size:13px;"><span class="dot" style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--cat-${cat});margin-right:5px;"></span>${suggestedClub || "—"} ${basisHtml}</span>
+        </div>
+        <div class="club-stat-row" style="padding-top:0; opacity:0.7;">
+          <div class="dist-row-content">
+            <span class="name" style="font-weight:400; font-size:12px; padding-left:16px;">Historically used</span>
+            <span class="range">${usedText}</span>
+          </div>
+        </div>`;
+      }).join("");
+      return `<div style="margin-bottom:14px;">
+        <div class="field-label" style="margin-bottom:6px;">${course}</div>
+        ${rows}
+      </div>`;
+    }).join("");
+  }
+
   function renderGirAllTime(roundStats) {
     const byCourseHole = {}; // "course|hole" -> { course, hole, par, clubs: {club: {count, distances:[]}} }
     roundStats.forEach(x => {
@@ -701,6 +817,7 @@
       atDist[c] = { full: summarize(full), short: summarize(short) };
     });
     renderClubDist("#atClubDist", atDist, false);
+    renderTeeClubSuggestions(roundStats, atDist);
     renderGirAllTime(roundStats);
 
     // Rounds list

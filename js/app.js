@@ -1003,6 +1003,51 @@
     }
   }
 
+  // ---------------- Quick actions (Siri Shortcuts / Back Tap / NFC triggers) ----------------
+  // A Shortcut opens e.g. index.html?action=logshot&club=7%20Iron — this runs
+  // once the app is fully logged in and ready, so a voice command or a tap on
+  // the back of the phone can log a shot with zero screen navigation.
+  function processQuickAction() {
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get("action");
+    if (!action) return;
+    history.replaceState({}, "", window.location.pathname); // don't re-fire on reload/back
+
+    const round = activeRound();
+    if (!round) { toast("No active round — open the app normally to start one"); return; }
+
+    if (action === "logshot") {
+      const club = params.get("club");
+      if (!club) { toast("Shortcut is missing a club name"); return; }
+      quickLogShot(round, club);
+    } else if (action === "ongreen") {
+      $("#btnOnGreen").click();
+    }
+  }
+
+  async function quickLogShot(round, requestedClub) {
+    showScreen("round");
+    const bag = DB.getBag();
+    const club = bag.find(c => c.toLowerCase() === requestedClub.toLowerCase()) || requestedClub;
+    toast("Locking GPS for " + club + "…");
+    try {
+      const loc = await captureLocation({
+        onSample: (sample, best) => { toast("Locking GPS… ±" + best.accuracy + "m"); }
+      });
+      const entry = {
+        id: DB.uid(), roundId: round.id, hole: round.currentHole, seq: Date.now(),
+        type: "Shot", club, lat: loc.lat, lon: loc.lon,
+        accuracy: loc.accuracy, timestamp: loc.timestamp, synced: false
+      };
+      DB.addEntry(entry);
+      Sync.attempt();
+      toast("Logged " + club + " (±" + loc.accuracy + "m)");
+      renderRound();
+    } catch (err) {
+      toast("GPS failed: " + (err.message || "check location permission"));
+    }
+  }
+
   // ---------------- Boot ----------------
   function boot() {
     if ("serviceWorker" in navigator) {
@@ -1012,6 +1057,7 @@
     const activeId = DB.getActiveRoundId();
     const round = activeId ? DB.getRound(activeId) : null;
     showScreen(round && !round.ended ? "round" : "home");
+    processQuickAction();
   }
 
   if (localStorage.getItem(AUTH_KEY) === "true") {
