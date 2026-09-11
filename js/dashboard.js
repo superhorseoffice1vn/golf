@@ -743,6 +743,57 @@
     });
   }
 
+  function renderClubGapChart(dist) {
+    const el = $("#clubGapChart");
+    const clubs = Object.keys(dist)
+      .filter(c => dist[c].full)
+      .sort((a, b) => dist[b].full.avg - dist[a].full.avg);
+    if (clubs.length === 0) {
+      el.innerHTML = '<div class="empty">Not enough full-swing data yet.</div>';
+      return;
+    }
+
+    const rowH = 42, padTop = 10, padBottom = 34, padLeft = 92, padRight = 44, chartW = 260;
+    const maxObserved = Math.max(...clubs.map(c => dist[c].full.max));
+    const maxVal = Math.ceil(maxObserved / 20) * 20 + 10;
+    const totalH = padTop + padBottom + clubs.length * rowH;
+    const totalW = padLeft + chartW + padRight;
+    const x = (yards) => padLeft + (yards / maxVal) * chartW;
+    const step = maxVal > 150 ? 50 : 25;
+
+    let grid = "";
+    for (let g = 0; g <= maxVal; g += step) {
+      const gx = x(g);
+      grid += `<line x1="${gx}" y1="${padTop - 4}" x2="${gx}" y2="${totalH - padBottom + 4}" stroke="var(--line)" stroke-width="1" />`;
+      grid += `<text x="${gx}" y="${totalH - padBottom + 18}" font-size="10" fill="var(--ink-dim)" text-anchor="middle" font-family="monospace">${g}</text>`;
+    }
+    grid += `<text x="${padLeft + chartW / 2}" y="${totalH - 4}" font-size="10" fill="var(--ink-dim)" text-anchor="middle" font-family="sans-serif">yards</text>`;
+
+    let rows = "";
+    clubs.forEach((club, i) => {
+      const d = dist[club].full;
+      const y = padTop + i * rowH;
+      const barY = y + 8, barH = 20;
+      const cat = clubCategory(club);
+      const barX = x(0), barEnd = x(d.avg);
+      const minX = x(d.min), maxX = x(d.max);
+
+      rows += `<text x="${padLeft - 8}" y="${barY + barH / 2 + 4}" font-size="12" font-weight="700" fill="var(--ink)" text-anchor="end" font-family="sans-serif">${club}</text>`;
+      rows += `<rect x="${barX}" y="${barY}" width="${Math.max(barEnd - barX, 1)}" height="${barH}" rx="3" fill="var(--cat-${cat})" opacity="0.85" />`;
+      rows += `<line x1="${minX}" y1="${barY + barH / 2}" x2="${maxX}" y2="${barY + barH / 2}" stroke="var(--ink)" stroke-width="1.5" opacity="0.5" />`;
+      rows += `<line x1="${minX}" y1="${barY + 3}" x2="${minX}" y2="${barY + barH - 3}" stroke="var(--ink)" stroke-width="1.5" opacity="0.5" />`;
+      rows += `<line x1="${maxX}" y1="${barY + 3}" x2="${maxX}" y2="${barY + barH - 3}" stroke="var(--ink)" stroke-width="1.5" opacity="0.5" />`;
+      rows += `<text x="${barEnd + 6}" y="${barY + barH / 2 + 4}" font-size="12" font-weight="700" fill="var(--ink)" font-family="monospace">${Math.round(d.avg)}y</text>`;
+
+      if (i < clubs.length - 1) {
+        const gap = Math.round(d.avg - dist[clubs[i + 1]].full.avg);
+        rows += `<text x="${padLeft - 8}" y="${y + rowH - 3}" font-size="10" fill="var(--ink-dim)" text-anchor="end" font-family="monospace">↓ ${gap}y gap</text>`;
+      }
+    });
+
+    el.innerHTML = `<svg viewBox="0 0 ${totalW} ${totalH}" style="width:100%; height:auto; display:block;">${grid}${rows}</svg>`;
+  }
+
   function renderAllTime() {
     const roundStats = rounds.map(rd => ({ rd, stats: computeRoundStats(rd.rows) }));
     const totalStrokes = roundStats.reduce((s, x) => s + x.stats.totalStrokes, 0);
@@ -817,6 +868,7 @@
       atDist[c] = { full: summarize(full), short: summarize(short) };
     });
     renderClubDist("#atClubDist", atDist, false);
+    renderClubGapChart(atDist);
     renderTeeClubSuggestions(roundStats, atDist);
     renderGirAllTime(roundStats);
 

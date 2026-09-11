@@ -483,3 +483,4 @@ input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .scorecard-legend .sc-bogey  { border: 2px solid var(--ink-dim); border-radius: 3px; }
 .scorecard-legend .sc-double { border: 2px solid var(--danger); border-radius: 3px; }
 .scorecard-legend .sc-gir-legend { background: var(--fairway); border-radius: 50%; }
+.gap-chart-legend { font-size: 11px; color: var(--ink-dim); margin-top: 8px; }
