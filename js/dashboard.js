@@ -15,6 +15,7 @@
   let selectedRoundKey = null;
   let selectedPlayer = null;
   let selectedMapHole = "all";
+  let currentRoundStats = null;
   let shotMapInstance = null;
   let shotMapLayer = null;
 
@@ -270,6 +271,15 @@
     return shotMapInstance;
   }
 
+  function setMapFullscreen(on) {
+    $("#mapWrap").classList.toggle("fullscreen", on);
+    $("#btnMapClose").style.display = on ? "" : "none";
+    $("#btnMapFullscreen").style.display = on ? "none" : "";
+    if (shotMapInstance) setTimeout(() => shotMapInstance.invalidateSize(), 60);
+  }
+  $("#btnMapFullscreen").addEventListener("click", () => setMapFullscreen(true));
+  $("#btnMapClose").addEventListener("click", () => setMapFullscreen(false));
+
   function renderMapHoleChips(rd) {
     const chipRow = $("#mapHoleChips");
     chipRow.innerHTML = "";
@@ -322,6 +332,23 @@
     }).join("");
   }
 
+  // Short label for on-map pins — "Pitching Wedge" is too long to sit next
+  // to a pin, "PW" isn't. Falls back gracefully for custom club names.
+  function abbreviateClub(name) {
+    const n = (name || "").trim();
+    if (/^driver$/i.test(n)) return "Dr";
+    if (/^putter$/i.test(n)) return "Pt";
+    if (/^pitching wedge$/i.test(n)) return "PW";
+    if (/^gap wedge$/i.test(n)) return "GW";
+    if (/^sand wedge$/i.test(n)) return "SW";
+    if (/^lob wedge$/i.test(n)) return "LW";
+    let m = n.match(/^(\d+)\s*wood$/i); if (m) return m[1] + "w";
+    m = n.match(/^(\d+)\s*hybrid$/i); if (m) return m[1] + "h";
+    m = n.match(/^(\d+)\s*iron$/i); if (m) return m[1] + "i";
+    m = n.match(/^(\d+)\s*wedge$/i); if (m) return m[1] + "°";
+    return n.length <= 4 ? n : n.slice(0, 3);
+  }
+
   function renderShotMap(points, colorByHole) {
     const box = $("#shotMap");
     const empty = $("#shotMapEmpty");
@@ -357,21 +384,35 @@
       holePts.forEach((p, i) => {
         const isGreen = p.type === "Green";
         const cat = isGreen ? "putter" : clubCategory(p.club);
-        const label = isGreen ? "⛳" : String(i + 1);
+        const badge = isGreen ? "⛳" : String(i + 1);
+
+        let pillText;
+        if (isGreen) {
+          const holeInfo = currentRoundStats ? currentRoundStats.perHole[p.hole] : null;
+          pillText = holeInfo && holeInfo.putts != null
+            ? holeInfo.putts + (holeInfo.putts === 1 ? " putt" : " putts")
+            : "On green";
+        } else {
+          const abbrev = abbreviateClub(p.club);
+          if (i < holePts.length - 1) {
+            const yards = Math.round(toYards(haversine(p, holePts[i + 1])));
+            pillText = `${abbrev} · ${yards}y`;
+          } else {
+            pillText = abbrev;
+          }
+        }
+
         const icon = L.divIcon({
           className: "",
-          html: `<div style="background:var(--cat-${cat}); width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#0B0F0E; font-weight:800; font-size:12px; border:2px solid #0F1611; box-shadow:0 1px 5px rgba(0,0,0,0.5); font-family:sans-serif;">${label}</div>`,
-          iconSize: [26, 26],
-          iconAnchor: [13, 13]
+          html: `<div style="display:flex; align-items:center; gap:5px;">
+            <div style="background:var(--cat-${cat}); width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#0B0F0E; font-weight:800; font-size:12px; border:2px solid #0F1611; box-shadow:0 1px 5px rgba(0,0,0,0.5); font-family:sans-serif; flex-shrink:0;">${badge}</div>
+            <div style="background:rgba(15,22,17,0.92); color:#F1F5EE; font-size:11px; font-weight:700; padding:3px 8px; border-radius:8px; border:1px solid rgba(255,255,255,0.15); white-space:nowrap; font-family:monospace;">${pillText}</div>
+          </div>`,
+          iconSize: [170, 28],
+          iconAnchor: [13, 14]
         });
 
-        let nextInfo = "";
-        if (!isGreen && p.club && i < holePts.length - 1) {
-          const yards = Math.round(toYards(haversine(p, holePts[i + 1])));
-          nextInfo = `<br>${yards}y to next`;
-        }
-        const popup = `<b>Hole ${holeNum}</b><br>${isGreen ? "On green" : p.club}${nextInfo}<br><span style="color:var(--ink-dim)">±${p.accuracy}m accuracy</span>`;
-
+        const popup = `<b>Hole ${holeNum}</b><br>${isGreen ? "On green" : p.club}<br><span style="color:var(--ink-dim)">±${p.accuracy}m accuracy</span>`;
         L.marker([p.lat, p.lon], { icon }).addTo(shotMapLayer).bindPopup(popup);
       });
     });
@@ -530,6 +571,7 @@
     $("#rdDuration").textContent = formatDuration(rd.rows);
 
     const stats = computeRoundStats(rd.rows);
+    currentRoundStats = stats;
     $("#rdStrokes").textContent = stats.totalStrokes;
     $("#rdPutts").textContent = stats.totalPutts;
     $("#rdHoles").textContent = stats.holesPlayed;
@@ -889,6 +931,7 @@
     $$(".dash-tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === tab));
     $("#tab-round").style.display = tab === "round" ? "" : "none";
     $("#tab-alltime").style.display = tab === "alltime" ? "" : "none";
+    if (tab !== "round") setMapFullscreen(false);
     if (tab === "round" && shotMapInstance) setTimeout(() => shotMapInstance.invalidateSize(), 50);
   }
   $$(".dash-tabs button").forEach(btn => btn.addEventListener("click", () => switchTab(btn.dataset.tab)));

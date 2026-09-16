@@ -69,10 +69,16 @@
           <div class="kpi"><div class="num" id="rdVsPar">—</div><div class="lbl">vs Par</div></div>
         </div>
         <div class="stat-card">
-          <div class="title">Shot Map</div>
+          <div class="title-row">
+            <div class="title">Shot Map</div>
+            <button class="map-fullscreen-btn" id="btnMapFullscreen">⛶ Full screen</button>
+          </div>
           <div class="round-chip-row" id="mapHoleChips"></div>
-          <div class="map-caption">Numbered = shot order · ⛳ = green marker · tap a pin for details</div>
-          <div class="map-box" id="shotMap"></div>
+          <div class="map-caption">Club · distance shown on each pin · tap a pin for accuracy details</div>
+          <div class="map-wrap" id="mapWrap">
+            <div class="map-box" id="shotMap"></div>
+            <button class="map-close-btn" id="btnMapClose" style="display:none;">✕ Close</button>
+          </div>
           <div class="empty" id="shotMapEmpty" style="display:none;">No GPS points logged for this selection.</div>
           <div class="shot-log" id="shotMapDetail" style="margin-top:14px;"></div>
         </div>
@@ -153,7 +159,7 @@
       <button class="btn" id="btnRetry">Try again</button>
     </div>
 
-    <div class="capture-hint" style="text-align:center; margin-top:20px;">Build 20260911_0329</div>
+    <div class="capture-hint" style="text-align:center; margin-top:20px;">Build 20260916_0212</div>
   </div>
 </div>
 

@@ -484,3 +484,21 @@ input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .scorecard-legend .sc-double { border: 2px solid var(--danger); border-radius: 3px; }
 .scorecard-legend .sc-gir-legend { background: var(--fairway); border-radius: 50%; }
 .gap-chart-legend { font-size: 11px; color: var(--ink-dim); margin-top: 8px; }
+
+/* ---------- Shot map fullscreen ---------- */
+.title-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.title-row .title { margin-bottom: 0; }
+.map-fullscreen-btn {
+  background: var(--panel-raised); border: 1px solid var(--line); color: var(--ink);
+  border-radius: 8px; padding: 6px 10px; font-size: 11px; font-weight: 700;
+}
+.map-wrap { position: relative; }
+.map-close-btn {
+  position: absolute; top: 10px; right: 10px; z-index: 1000;
+  background: rgba(15,22,17,0.9); border: 1px solid var(--line); color: var(--ink);
+  border-radius: 8px; padding: 8px 14px; font-size: 13px; font-weight: 700;
+}
+.map-wrap.fullscreen {
+  position: fixed !important; inset: 0 !important; z-index: 300; background: var(--bg);
+}
+.map-wrap.fullscreen .map-box { height: 100vh !important; border-radius: 0; }
