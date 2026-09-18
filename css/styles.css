@@ -224,6 +224,24 @@ input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 }
 .club-section-title .swatch { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
 
+/* ---------- Suggested club shortcut — the fast path ---------- */
+.suggested-section {
+  background: var(--panel); border: 1px solid var(--accent); border-radius: 14px;
+  padding: 14px; margin-bottom: 24px;
+}
+.suggested-grid { display: flex; flex-direction: column; gap: 10px; }
+.suggested-btn {
+  display: flex !important; flex-direction: row !important; align-items: center;
+  gap: 12px; padding: 16px 16px !important; font-size: 17px !important;
+  border-left-width: 5px !important;
+}
+.suggested-btn .club-icon { font-size: 20px; }
+.suggested-count {
+  margin-left: auto; font-family: var(--mono); font-size: 11px; font-weight: 400;
+  color: var(--ink-dim); opacity: 0.85;
+}
+.suggested-btn:active .suggested-count { color: inherit; opacity: 0.7; }
+
 .putts-block { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; margin-bottom: 18px; }
 .putts-control { display: flex; align-items: center; justify-content: center; gap: 24px; margin: 10px 0; }
 .putts-control .count { font-family: var(--mono); font-size: 40px; font-weight: 700; width: 60px; text-align: center; }
@@ -434,6 +452,7 @@ input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .map-box {
   height: 340px; border-radius: 12px; overflow: hidden;
   border: 1px solid var(--line); background: var(--panel);
+  transition: transform 0.3s ease;
 }
 .leaflet-container { background: var(--bg); font-family: var(--sans); }
 .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--panel-raised); color: var(--ink); }
@@ -502,3 +521,9 @@ input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
   position: fixed !important; inset: 0 !important; z-index: 300; background: var(--bg);
 }
 .map-wrap.fullscreen .map-box { height: 100vh !important; border-radius: 0; }
+
+.map-fullscreen-chips {
+  display: none; position: absolute; top: 10px; left: 10px; right: 100px;
+  z-index: 1000; overflow-x: auto; flex-wrap: nowrap;
+}
+.map-wrap.fullscreen .map-fullscreen-chips { display: flex; }

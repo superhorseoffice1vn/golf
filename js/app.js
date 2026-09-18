@@ -429,11 +429,61 @@
   });
 
   // ---------------- Club picker ----------------
+  function currentShotIndex() {
+    const round = activeRound();
+    if (!round) return 1;
+    const shots = DB.entriesForHole(round.id, round.currentHole).filter(e => e.type === "Shot").sort((a, b) => a.seq - b.seq);
+    if (editingEntryId) {
+      const idx = shots.findIndex(e => e.id === editingEntryId);
+      return idx >= 0 ? idx + 1 : shots.length + 1;
+    }
+    return shots.length + 1; // the shot about to be logged
+  }
+
   function openClubPicker() {
     const container = $("#clubGroups");
     container.innerHTML = "";
 
+    const round = activeRound();
     const bag = DB.getBag();
+    const shotIndex = currentShotIndex();
+
+    // Suggested: what you've actually used at this exact course/hole/shot
+    // position before. On a course you play repeatedly, this is usually
+    // the fastest path — one tap instead of hunting through categories.
+    if (round) {
+      const counts = DB.getHistoricalClubCounts(round.course, round.currentHole, shotIndex);
+      const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+      if (sorted.length > 0) {
+        const suggestions = [sorted[0]];
+        if (sorted[1] && sorted[1][1] >= sorted[0][1] / 2) suggestions.push(sorted[1]);
+
+        const section = document.createElement("div");
+        section.className = "club-section suggested-section";
+        const title = document.createElement("div");
+        title.className = "club-section-title";
+        title.innerHTML = `<span class="swatch" style="background:var(--accent)"></span>Suggested for this shot`;
+        section.appendChild(title);
+        const grid = document.createElement("div");
+        grid.className = "club-grid suggested-grid";
+        suggestions.forEach(([club, count]) => {
+          const cat = clubCategory(club);
+          const b = document.createElement("button");
+          b.className = "cat-" + cat + " suggested-btn";
+          b.innerHTML = `<span class="club-icon">${CATEGORY_ICON[cat]}</span><span>${club}</span><span class="suggested-count">used ×${count}</span>`;
+          b.addEventListener("click", () => chooseClub(club));
+          grid.appendChild(b);
+        });
+        section.appendChild(grid);
+        container.appendChild(section);
+      }
+    }
+
+    // After the tee shot, woods/hybrids are very unlikely to come up again
+    // on a short course — promote irons/wedges above them rather than
+    // hiding anything, so a genuine recovery shot is still one tap away.
+    const order = shotIndex > 1 ? ["iron", "wedge", "putter", "wood", "other"] : CATEGORY_ORDER;
+
     const byCat = {};
     bag.forEach(club => {
       const cat = clubCategory(club);
@@ -441,7 +491,7 @@
       byCat[cat].push(club);
     });
 
-    CATEGORY_ORDER.forEach(cat => {
+    order.forEach(cat => {
       const clubs = byCat[cat];
       if (!clubs || clubs.length === 0) return;
 

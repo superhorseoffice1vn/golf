@@ -281,22 +281,23 @@
   $("#btnMapClose").addEventListener("click", () => setMapFullscreen(false));
 
   function renderMapHoleChips(rd) {
-    const chipRow = $("#mapHoleChips");
-    chipRow.innerHTML = "";
-    const holes = [...new Set(rd.rows.map(r => r.hole).filter(h => h != null))].sort((a, b) => a - b);
+    [$("#mapHoleChips"), $("#mapHoleChipsFullscreen")].forEach(chipRow => {
+      chipRow.innerHTML = "";
+      const holes = [...new Set(rd.rows.map(r => r.hole).filter(h => h != null))].sort((a, b) => a - b);
 
-    const allChip = document.createElement("button");
-    allChip.className = "round-chip" + (selectedMapHole === "all" ? " active" : "");
-    allChip.textContent = "All holes";
-    allChip.addEventListener("click", () => { selectedMapHole = "all"; renderMapHoleChips(rd); updateShotMap(rd); });
-    chipRow.appendChild(allChip);
+      const allChip = document.createElement("button");
+      allChip.className = "round-chip" + (selectedMapHole === "all" ? " active" : "");
+      allChip.textContent = "All holes";
+      allChip.addEventListener("click", () => { selectedMapHole = "all"; renderMapHoleChips(rd); updateShotMap(rd); });
+      chipRow.appendChild(allChip);
 
-    holes.forEach(h => {
-      const chip = document.createElement("button");
-      chip.className = "round-chip" + (selectedMapHole === h ? " active" : "");
-      chip.textContent = "Hole " + h;
-      chip.addEventListener("click", () => { selectedMapHole = h; renderMapHoleChips(rd); updateShotMap(rd); });
-      chipRow.appendChild(chip);
+      holes.forEach(h => {
+        const chip = document.createElement("button");
+        chip.className = "round-chip" + (selectedMapHole === h ? " active" : "");
+        chip.textContent = "Hole " + h;
+        chip.addEventListener("click", () => { selectedMapHole = h; renderMapHoleChips(rd); updateShotMap(rd); });
+        chipRow.appendChild(chip);
+      });
     });
   }
 
@@ -349,6 +350,15 @@
     return n.length <= 4 ? n : n.slice(0, 3);
   }
 
+  // Compass bearing (0-360, 0=north) from one GPS point to another.
+  function bearingDegrees(from, to) {
+    const lat1 = from.lat * Math.PI / 180, lat2 = to.lat * Math.PI / 180;
+    const dLon = (to.lon - from.lon) * Math.PI / 180;
+    const y = Math.sin(dLon) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+    return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  }
+
   function renderShotMap(points, colorByHole) {
     const box = $("#shotMap");
     const empty = $("#shotMapEmpty");
@@ -363,6 +373,15 @@
     const map = ensureMap();
     setTimeout(() => map.invalidateSize(), 50); // in case the container was hidden when the map was created
     shotMapLayer.clearLayers();
+
+    // Single hole selected: orient tee-to-green vertically (tee at bottom,
+    // green at top) by rotating the whole map container. "All holes" stays
+    // north-up as usual, since there's no single direction to align to.
+    const singleHole = !colorByHole && points.length >= 2;
+    const bearing = singleHole ? bearingDegrees(points[0], points[points.length - 1]) : 0;
+    box.style.transform = singleHole ? `rotate(${-bearing}deg)` : "";
+    box.style.transformOrigin = "center center";
+    if (map.dragging) { singleHole ? map.dragging.disable() : map.dragging.enable(); }
 
     const byHole = {};
     points.forEach(p => { (byHole[p.hole] = byHole[p.hole] || []).push(p); });
@@ -402,22 +421,34 @@
           }
         }
 
+        // Counter-rotate the label content so it reads upright even though
+        // the map underneath it is rotated. Pivoting at the badge's own
+        // center (matching iconAnchor) keeps the pin itself exactly on its
+        // true GPS position — only the label swings around it.
         const icon = L.divIcon({
           className: "",
-          html: `<div style="display:flex; align-items:center; gap:5px;">
-            <div style="background:var(--cat-${cat}); width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#0B0F0E; font-weight:800; font-size:12px; border:2px solid #0F1611; box-shadow:0 1px 5px rgba(0,0,0,0.5); font-family:sans-serif; flex-shrink:0;">${badge}</div>
-            <div style="background:rgba(15,22,17,0.92); color:#F1F5EE; font-size:11px; font-weight:700; padding:3px 8px; border-radius:8px; border:1px solid rgba(255,255,255,0.15); white-space:nowrap; font-family:monospace;">${pillText}</div>
+          html: `<div style="transform: rotate(${bearing}deg); transform-origin: 13px 14px;">
+            <div style="display:flex; align-items:center; gap:5px;">
+              <div style="background:var(--cat-${cat}); width:26px; height:26px; border-radius:50%; display:flex; align-items:center; justify-content:center; color:#0B0F0E; font-weight:800; font-size:12px; border:2px solid #0F1611; box-shadow:0 1px 5px rgba(0,0,0,0.5); font-family:sans-serif; flex-shrink:0;">${badge}</div>
+              <div style="background:rgba(15,22,17,0.92); color:#F1F5EE; font-size:11px; font-weight:700; padding:3px 8px; border-radius:8px; border:1px solid rgba(255,255,255,0.15); white-space:nowrap; font-family:monospace;">${pillText}</div>
+            </div>
           </div>`,
           iconSize: [170, 28],
           iconAnchor: [13, 14]
         });
 
-        const popup = `<b>Hole ${holeNum}</b><br>${isGreen ? "On green" : p.club}<br><span style="color:var(--ink-dim)">±${p.accuracy}m accuracy</span>`;
+        const popup = `<div style="transform:rotate(${bearing}deg);"><b>Hole ${holeNum}</b><br>${isGreen ? "On green" : p.club}<br><span style="color:var(--ink-dim)">±${p.accuracy}m accuracy</span></div>`;
         L.marker([p.lat, p.lon], { icon }).addTo(shotMapLayer).bindPopup(popup);
       });
     });
 
-    map.fitBounds(allLatLngs, { padding: [30, 30], maxZoom: 19 });
+    // Extra-generous padding when rotating: a line that fits tightly in a
+    // north-up square can need up to ~1.4x more room once rotated (worst
+    // case, a 45° bearing), since fitBounds itself has no idea a rotation
+    // is coming. Zooming out one extra level comfortably covers that.
+    const boundsPadding = singleHole ? [50, 50] : [30, 30];
+    map.fitBounds(allLatLngs, { padding: boundsPadding, maxZoom: 19 });
+    if (singleHole) map.zoomOut(1, { animate: false });
   }
 
   // ---------------- Rendering ----------------

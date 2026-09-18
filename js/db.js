@@ -174,6 +174,24 @@ const DB = (() => {
       return this.entriesForRound(roundId).filter(e => e.hole === hole);
     },
 
+    // How often each club has been used for this exact position — same
+    // course, same hole, same numbered shot (1st, 2nd, 3rd...) — across the
+    // active player's own history. Powers the club-picker's "Suggested"
+    // shortcut, since on a short course the same club gets used repeatedly.
+    getHistoricalClubCounts(course, hole, shotIndex) {
+      const key = (course || "").trim();
+      const rounds = this.getRounds().filter(r => (r.course || "").trim() === key);
+      const counts = {};
+      rounds.forEach(round => {
+        const shots = this.entriesForHole(round.id, hole)
+          .filter(e => e.type === "Shot")
+          .sort((a, b) => a.seq - b.seq);
+        const shot = shots[shotIndex - 1];
+        if (shot) counts[shot.club] = (counts[shot.club] || 0) + 1;
+      });
+      return counts;
+    },
+
     // ---- Hole summaries (putts) — per active player ----
     getHoles() { return read(pkey("fl_holes"), []); },
     saveHoleSummary(summary) {
