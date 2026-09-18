@@ -511,7 +511,7 @@ input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
   background: var(--panel-raised); border: 1px solid var(--line); color: var(--ink);
   border-radius: 8px; padding: 6px 10px; font-size: 11px; font-weight: 700;
 }
-.map-wrap { position: relative; }
+.map-wrap { position: relative; overflow: hidden; border-radius: 12px; }
 .map-close-btn {
   position: absolute; top: 10px; right: 10px; z-index: 1000;
   background: rgba(15,22,17,0.9); border: 1px solid var(--line); color: var(--ink);
@@ -519,6 +519,7 @@ input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 }
 .map-wrap.fullscreen {
   position: fixed !important; inset: 0 !important; z-index: 300; background: var(--bg);
+  border-radius: 0;
 }
 .map-wrap.fullscreen .map-box { height: 100vh !important; border-radius: 0; }
 
